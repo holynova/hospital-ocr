@@ -45,3 +45,9 @@ def test_names_do_not_require_a_person_specific_rule() -> None:
     assert extract_name("患者姓名：张三") == "张三"
     assert extract_name("患者姓名：李四") == "李四"
     assert extract_name("统一社会信用代码 123456789") is None
+
+
+def test_invoice_total_is_not_a_fee_subtotal() -> None:
+    assert extract_amount("治疗费88.00 金额合计(大写)贰佰叁拾肆元整 (小写1234.00") == 234
+    assert extract_amount("治疗费88.00 金额合计(大写)模糊 (小写)模糊") is None
+    assert extract_amount("金额合计(大写)壹万贰仟叁佰肆拾伍元陆角柒分") == 12345.67

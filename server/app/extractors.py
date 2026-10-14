@@ -61,15 +61,41 @@ def extract_date(text: str, hints: dict[str, object]) -> str | None:
 
 def extract_amount(text: str) -> float | None:
     compact = re.sub(r"\s+", "", normalize_text(text))
-    for pattern in [
-        r"[（(]小写[）)]([0-9]+(?:\.[0-9]{1,2})?)",
-        r"金额合计.*?[（(]小写[）)]([0-9]+(?:\.[0-9]{1,2})?)",
-        r"(?:诊察费|诊查费|治疗费)([0-9]+(?:\.[0-9]{1,2})?)",
-    ]:
-        match = re.search(pattern, compact)
+    capital = re.search(r"(?:金额合计|合计金额)[(]?大写[):]?([零壹贰叁肆伍陆柒捌玖拾佰仟万亿]+[元圆](?:整|正|[零壹贰叁肆伍陆柒捌玖角分]+)?)", compact)
+    if capital:
+        return parse_capital_money(capital.group(1))
+    values = {float(value) for value in re.findall(r"小写\)[:：]?[¥￥]?([0-9]+(?:\.[0-9]{1,2})?)(?![0-9])", compact)}
+    if len(values) == 1:
+        return values.pop()
+    if values or re.search(r"金额合计|合计金额", compact):
+        return None
+    fee = re.search(r"(?:诊察费|诊查费|治疗费)([0-9]+(?:\.[0-9]{1,2})?)", compact)
+    return float(fee.group(1)) if fee else None
+
+
+def parse_capital_money(text: str) -> float:
+    digits = dict(zip("零壹贰叁肆伍陆柒捌玖", range(10)))
+    units = {"拾": 10, "佰": 100, "仟": 1000}
+    whole, fraction = re.split(r"[元圆]", text, maxsplit=1)
+    total = section = digit = 0
+    for char in whole:
+        if char in digits:
+            digit = digits[char]
+        elif char in units:
+            section += (digit or 1) * units[char]
+            digit = 0
+        elif char == "万":
+            total += (section + digit) * 10000
+            section = digit = 0
+        elif char == "亿":
+            total = (total + section + digit) * 100000000
+            section = digit = 0
+    value = total + section + digit
+    for unit, divisor in [("角", 10), ("分", 100)]:
+        match = re.search(r"([零壹贰叁肆伍陆柒捌玖])" + unit, fraction)
         if match:
-            return float(match.group(1))
-    return None
+            value += digits[match.group(1)] / divisor
+    return round(value, 2)
 
 
 def extract_name(text: str) -> str | None:

@@ -170,6 +170,7 @@ function renderInitialTable() {
       <td>-</td>
       <td>-</td>
       <td><span class="pill">排队中</span></td>
+      <td>-</td>
     `;
     resultsTableBody.appendChild(tr);
 
@@ -310,7 +311,7 @@ async function startBatchProcessing() {
         name: "未知姓名",
         skipped: true,
         rotation: 0,
-        confidence: 0,
+        confidence: null,
         text: ""
       };
       rawRecords.push(fallbackRecord);
@@ -363,6 +364,8 @@ async function startBatchProcessing() {
   state.isProcessing = false;
   state.isPaused = false;
 
+  state.records.forEach((record, index) => updateTableRow(document.getElementById(`row-${index}`), record, index));
+
   if (state.isCancelled) {
     progressFill.style.background = "var(--warning)";
     progressStatus.textContent = `任务已终止。已处理 ${rawRecords.length} / ${total} 张图片。`;
@@ -390,6 +393,74 @@ function updateTableRow(row, record, idx) {
   row.children[6].innerHTML = rotationStr;
   row.children[7].innerHTML = `<span style="font-family: monospace; font-size: 12px;">${outputNameStr}</span>`;
 
+  const confidenceCell = row.children[9];
+  confidenceCell.replaceChildren();
+  const score = document.createElement("div");
+  const percent = value => Number.isFinite(value) ? `${(value * 100).toFixed(1)}%` : "未提供";
+  score.textContent = `文字：${percent(record.confidence)} / 金额行：${percent(record.amountConfidence)}`;
+  score.title = "模型分数，不代表金额、姓名或日期正确的概率；金额行分数也不是金额字段正确率。";
+  confidenceCell.append(score);
+  const warning = document.createElement("div");
+  const reasons = [...(record.reviewReasons || [])];
+  if (!Number.isFinite(record.confidence)) reasons.push("模型未提供置信度");
+  else if (record.confidence < 0.9) reasons.push("文字置信度低于90%");
+  if (record.amountConfidence !== null && Number.isFinite(record.amountConfidence) && record.amountConfidence < 0.9) reasons.push("金额行置信度低于90%");
+  warning.textContent = `${record.amountSource || ""} ${reasons.join("；") || "建议核对原图"}`;
+  warning.style.color = reasons.length ? "var(--danger)" : "var(--muted)";
+  confidenceCell.append(warning);
+  const details = document.createElement("details");
+  const label = document.createElement("summary");
+  label.textContent = "查看识别文字";
+  const rawText = document.createElement("pre");
+  rawText.textContent = record.text || "没有识别文字";
+  rawText.style.cssText = "white-space:pre-wrap;max-width:320px;max-height:220px;overflow:auto;font-size:12px;";
+  details.append(label, rawText);
+  confidenceCell.append(details);
+  const reviewLabel = document.createElement("label");
+  const reviewed = document.createElement("input");
+  reviewed.type = "checkbox";
+  reviewed.checked = Boolean(record.reviewed);
+  reviewed.disabled = state.isProcessing;
+  reviewed.addEventListener("change", () => { record.reviewed = reviewed.checked; state.summary = buildSummary(state.records); });
+  reviewLabel.append(reviewed, document.createTextNode(" 已人工核对"));
+  confidenceCell.append(reviewLabel);
+  if (record.kind === "invoice") {
+    const edit = document.createElement("button");
+    edit.className = "btn btn-outline";
+    edit.textContent = "修改金额";
+    edit.disabled = state.isProcessing;
+    edit.addEventListener("click", () => {
+      edit.disabled = true;
+      const form = document.createElement("form");
+      const input = document.createElement("input");
+      input.type = "number";
+      input.min = "0.01";
+      input.step = "0.01";
+      input.required = true;
+      input.value = record.amount === null ? "" : String(record.amount);
+      input.setAttribute("aria-label", "人工核对总金额");
+      input.className = "form-input";
+      input.style.width = "110px";
+      const save = document.createElement("button");
+      save.type = "submit";
+      save.className = "btn btn-outline";
+      save.textContent = "保存金额";
+      const cancel = document.createElement("button");
+      cancel.type = "button";
+      cancel.className = "btn btn-outline";
+      cancel.textContent = "取消";
+      cancel.addEventListener("click", () => { form.remove(); edit.disabled = false; });
+      form.append(input, save, cancel);
+      form.addEventListener("submit", event => {
+        event.preventDefault();
+        editAmount(record, input.value);
+      });
+      confidenceCell.append(form);
+      input.focus();
+    });
+    confidenceCell.append(edit);
+  }
+
   // 操作列 (单文件下载) 与缩略图摆正更新
   const actionCell = row.children[8];
   if (record.outputName && state.rotatedBlobs.has(record.outputName)) {
@@ -410,6 +481,31 @@ function updateTableRow(row, record, idx) {
   } else {
     actionCell.innerHTML = `<span class="pill">完成</span>`;
   }
+}
+
+function editAmount(record, value) {
+  if (state.isProcessing) return;
+  const text = value.trim();
+  if (!/^\d+(?:\.\d{1,2})?$/.test(text) || !Number.isFinite(Number(text)) || Number(text) <= 0) {
+    alert("请输入大于0、最多两位小数的金额。");
+    return;
+  }
+  record.originalOcrAmount ??= record.amount;
+  record.amount = Number(text);
+  record.amountSource = "人工修改";
+  record.amountConfidence = null;
+  record.reviewReasons = ["金额已人工修改，仍请核对日期和姓名"];
+  record.reviewed = false;
+  const blobs = state.records.map(item => state.rotatedBlobs.get(item.outputName));
+  const usedNames = new Set();
+  state.rotatedBlobs.clear();
+  state.records.forEach((item, index) => {
+    generateUniqueOutputName(item, item.originalName, usedNames);
+    if (blobs[index]) state.rotatedBlobs.set(item.outputName, blobs[index]);
+    updateTableRow(document.getElementById(`row-${index}`), item, index);
+  });
+  state.summary = buildSummary(state.records);
+  statAmount.textContent = `${formatMoney(state.summary.totalAmount)} 元`;
 }
 
 function getKindBadge(kind) {

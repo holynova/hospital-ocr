@@ -2,6 +2,8 @@ import assert from "node:assert";
 import {
   extractDate,
   extractAmount,
+  extractAmountDetails,
+  parseCapitalMoney,
   extractName,
   classifyDocument,
   fillMissingNames,
@@ -23,6 +25,27 @@ assert.strictEqual(extractAmount("金额合计（小写）123.45元"), 123.45);
 assert.strictEqual(extractAmount("治疗费42.50元"), 42.5);
 assert.strictEqual(extractAmount("（小写）10.55"), 10.55);
 assert.strictEqual(extractAmount("病历就医记录无金额"), null);
+assert.strictEqual(parseCapitalMoney("贰佰叁拾肆元整"), 234);
+assert.strictEqual(parseCapitalMoney("壹万贰仟叁佰肆拾伍元陆角柒分"), 12345.67);
+assert.strictEqual(parseCapitalMoney("壹佰元零伍分"), 100.05);
+// A damaged closing bracket must not turn a subtotal into the invoice total.
+const damagedTotal = "治疗费88.00\n金额合计(大写)贰佰叁拾肆元整\n(小写1234.00";
+assert.strictEqual(extractAmount(damagedTotal), 234);
+assert(extractAmountDetails(damagedTotal).warnings.length > 0);
+assert.strictEqual(extractAmount("治疗费88.00 金额合计（大写）模糊（小写）无法识别"), null);
+assert.strictEqual(extractAmount("金额合计（大写）贰佰叁拾肆元整（小写）234.00"), 234);
+assert.strictEqual(extractAmountDetails("金额合计（大写）贰佰叁拾肆元整（小写）233.00").warnings.length, 1);
+assert.strictEqual(extractAmount("（小写）234.00 （小写）235.00"), null);
+const scored = processOcrResult("synthetic.jpg", {
+  text: "开票日期20240102 患者姓名：张三\n金额合计（小写）234.00",
+  confidence: 0.973,
+  lines: [[{ text: "金额合计（小写）234.00", confidence: 0.82 }]]
+}, "2024");
+assert.strictEqual(scored.confidence, 0.973);
+assert.strictEqual(scored.amountConfidence, 0.82);
+assert.strictEqual(processOcrResult("synthetic.jpg", {text: ""}, "2024").confidence, null);
+assert(makeCsv([scored]).includes("0.973,0.82"));
+assert.strictEqual(buildSummary([scored]).invoices[0].amountConfidence, 0.82);
 console.log("✔ 金额提取测试通过");
 
 // 3. 姓名提取测试 (黑名单与白名单)

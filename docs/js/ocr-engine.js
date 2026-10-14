@@ -90,7 +90,8 @@ class ClientOCREngine {
         return {
           text: initialResult.text || "",
           rotation: 0,
-          confidence: typeof initialResult.confidence === "number" ? Math.round(initialResult.confidence * 100) / 100 : 0.9,
+          confidence: Number.isFinite(initialResult.confidence) ? initialResult.confidence : null,
+          lines: initialResult.lines || initialResult.results || [],
           durationMs
         };
       }
@@ -126,7 +127,8 @@ class ClientOCREngine {
       return {
         text: bestResult.text || "",
         rotation: bestAngle, // 记录需要顺时针旋转的角度
-        confidence: typeof bestResult.confidence === "number" ? Math.round(bestResult.confidence * 100) / 100 : 0.85,
+        confidence: Number.isFinite(bestResult.confidence) ? bestResult.confidence : null,
+        lines: bestResult.lines || bestResult.results || [],
         durationMs
       };
     } catch (err) {

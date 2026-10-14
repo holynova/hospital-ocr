@@ -17,7 +17,8 @@ export function processOcrResult(originalName, ocrResult, year) {
   const extractedDate = extractDate(text, hints);
   const date = extractedDate || hints.date || "unknown-date";
   
-  const amount = extractAmount(text);
+  const amountDetails = extractAmountDetails(text);
+  const amount = amountDetails.amount;
   const kind = classifyDocument(text, amount);
   
   // 如果分类是发票但金额没识别到，尝试使用文件名提示中的金额；若仍没有则为 null
@@ -38,7 +39,10 @@ export function processOcrResult(originalName, ocrResult, year) {
     name,
     skipped,
     rotation: ocrResult.rotation || 0,
-    confidence: ocrResult.confidence || 0,
+    confidence: Number.isFinite(ocrResult.confidence) ? ocrResult.confidence : null,
+    amountSource: amountDetails.source,
+    reviewReasons: amountDetails.warnings,
+    amountConfidence: getAmountConfidence(ocrResult.lines || ocrResult.results || [], amountDetails),
     text: text.trim()
   };
 }
@@ -102,23 +106,63 @@ export function extractDate(text, hints = {}) {
  * 提取发票金额 (严谨匹配，杜绝臆造)
  */
 export function extractAmount(text) {
-  const compact = normalizeText(text).replace(/\s+/g, "");
-  const patterns = [
-    /[（(]小写[）)]([0-9]+(?:\.[0-9]{1,2})?)/,
-    /金额合计.*?[（(]小写[）)]([0-9]+(?:\.[0-9]{1,2})?)/,
-    /(?:诊察费|诊查费|治疗费)([0-9]+(?:\.[0-9]{1,2})?)/
-  ];
+  return extractAmountDetails(text).amount;
+}
 
-  for (const pattern of patterns) {
-    const match = compact.match(pattern);
-    if (match && match[1]) {
-      const val = parseFloat(match[1]);
-      if (!isNaN(val) && val > 0) {
-        return Math.round(val * 100) / 100;
-      }
-    }
+export function parseCapitalMoney(text) {
+  const digits = { 零: 0, 壹: 1, 贰: 2, 叁: 3, 肆: 4, 伍: 5, 陆: 6, 柒: 7, 捌: 8, 玖: 9 };
+  const units = { 拾: 10, 佰: 100, 仟: 1000 };
+  const match = text.match(/^([零壹贰叁肆伍陆柒捌玖拾佰仟万亿]+)[元圆]((?:整|正)|[零壹贰叁肆伍陆柒捌玖角分]+)?$/);
+  if (!match) return null;
+  let total = 0, section = 0, digit = 0;
+  for (const char of match[1]) {
+    if (char in digits) digit = digits[char];
+    else if (char in units) { section += (digit || 1) * units[char]; digit = 0; }
+    else if (char === "万") { total += (section + digit) * 10000; section = 0; digit = 0; }
+    else if (char === "亿") { total = (total + section + digit) * 100000000; section = 0; digit = 0; }
   }
-  return null;
+  let value = total + section + digit;
+  const fraction = match[2] || "";
+  const jiao = fraction.match(/([零壹贰叁肆伍陆柒捌玖])角/);
+  const fen = fraction.match(/([零壹贰叁肆伍陆柒捌玖])分/);
+  if (jiao) value += digits[jiao[1]] / 10;
+  if (fen) value += digits[fen[1]] / 100;
+  return Math.round(value * 100) / 100;
+}
+
+export function extractAmountDetails(text) {
+  const compact = normalizeText(text).replace(/\s+/g, "");
+  const capitalMatch = compact.match(/(?:金额合计|合计金额)[(]?大写[):]?([零壹贰叁肆伍陆柒捌玖拾佰仟万亿]+[元圆](?:整|正|[零壹贰叁肆伍陆柒捌玖角分]+)?)/);
+  const capital = capitalMatch ? parseCapitalMoney(capitalMatch[1]) : null;
+  // A closing bracket is required: a misread bracket can look like a leading digit.
+  const numeric = [...compact.matchAll(/小写\)[:：]?[¥￥]?([0-9]+(?:\.[0-9]{1,2})?)(?![0-9])/g)].map(m => Number(m[1]));
+  const values = [...new Set(numeric)];
+  if (capital !== null && values.length === 1 && Math.abs(capital - values[0]) < 0.005) {
+    return { amount: capital, source: "大小写总额一致", warnings: [] };
+  }
+  if (capital !== null) {
+    return { amount: capital, source: "大写总额", warnings: [values.length ? "大小写总额不一致，请核对原图" : "小写总额未可靠识别，使用大写总额，请核对原图"] };
+  }
+  if (values.length === 1) return { amount: values[0], source: "小写总额", warnings: [] };
+  if (values.length > 1) return { amount: null, source: "总额冲突", warnings: ["发现多个不同总额，请人工确认"] };
+  if (/金额合计|合计金额/.test(compact)) {
+    return { amount: null, source: "总额未识别", warnings: ["总额未识别，不以项目小计代替总额"] };
+  }
+  const fee = compact.match(/(?:诊察费|诊查费|治疗费)([0-9]+(?:\.[0-9]{1,2})?)/);
+  if (fee) return { amount: Number(fee[1]), source: "费用项目", warnings: ["金额来自费用项目，可能不是发票总额"] };
+  return { amount: null, source: "未识别", warnings: [] };
+}
+
+function getAmountConfidence(lines, details) {
+  const candidates = lines.flat().filter(line => {
+    if (!Number.isFinite(line.confidence)) return false;
+    const text = normalizeText(line.text || "").replace(/\s+/g, "");
+    if (details.source.includes("大写") || details.source.includes("大小写")) return /大写|[壹贰叁肆伍陆柒捌玖]+[元圆]/.test(text);
+    if (details.source === "小写总额") return /小写/.test(text);
+    if (details.source === "费用项目") return /诊察费|诊查费|治疗费/.test(text);
+    return false;
+  });
+  return candidates.length ? Math.min(...candidates.map(line => line.confidence)) : null;
 }
 
 /**

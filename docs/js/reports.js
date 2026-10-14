@@ -44,7 +44,13 @@ export function buildSummary(records) {
       date: r.date,
       amount: r.amount,
       name: r.name,
-      rotation: r.rotation
+      rotation: r.rotation,
+      confidence: r.confidence ?? null,
+      amountConfidence: r.amountConfidence ?? null,
+      amountSource: r.amountSource || "",
+      reviewReasons: r.reviewReasons || [],
+      reviewed: Boolean(r.reviewed),
+      originalOcrAmount: r.originalOcrAmount ?? null
     })),
     medicalRecords: medical.map((r) => ({
       originalName: r.originalName,
@@ -53,7 +59,9 @@ export function buildSummary(records) {
       date: r.date,
       amount: null,
       name: r.name,
-      rotation: r.rotation
+      rotation: r.rotation,
+      confidence: r.confidence ?? null,
+      reviewed: Boolean(r.reviewed)
     })),
     skipped: skipped.map((r) => ({
       originalName: r.originalName,
@@ -62,7 +70,10 @@ export function buildSummary(records) {
       date: r.date,
       amount: r.amount,
       name: r.name,
-      rotation: r.rotation
+      rotation: r.rotation,
+      confidence: r.confidence ?? null,
+      reviewReasons: r.reviewReasons || [],
+      reviewed: Boolean(r.reviewed)
     }))
   };
 }
@@ -119,7 +130,7 @@ export function makeMarkdown(summary) {
  * @returns {string}
  */
 export function makeCsv(records) {
-  const rows = [["kind", "date", "amount", "name", "original_name", "output_name", "rotation"]];
+  const rows = [["kind", "date", "amount", "name", "original_name", "output_name", "rotation", "text_confidence", "amount_line_confidence", "amount_source", "reviewed", "review_reasons"]];
   for (const record of records) {
     rows.push([
       record.kind,
@@ -128,7 +139,12 @@ export function makeCsv(records) {
       record.name,
       record.originalName,
       record.outputName,
-      record.rotation
+      record.rotation,
+      record.confidence ?? "",
+      record.amountConfidence ?? "",
+      record.amountSource || "",
+      Boolean(record.reviewed),
+      (record.reviewReasons || []).join("；")
     ]);
   }
   return rows.map((row) => row.map(csvCell).join(",")).join("\n") + "\n";
