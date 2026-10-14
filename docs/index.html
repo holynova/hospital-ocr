@@ -3,155 +3,87 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Hospital Invoice OCR - 纯前端单批次版 (PP-OCRv6)</title>
+  <title>医疗单据 OCR 工作台</title>
   <link rel="stylesheet" href="css/style.css">
-  <!-- 引入 JSZip (纯端侧打包工具) -->
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.468.0/dist/umd/lucide.min.js"></script>
 </head>
 <body>
-  <div class="container">
-    <!-- 头部区域 -->
+  <main class="container">
     <header class="app-header">
-      <div>
-        <h1 class="brand-title">医疗发票与病历 OCR 工作台</h1>
-        <p class="brand-subtitle">纯前端单批次识别与自动归档 · 深度学习 PP-OCRv6 引擎 · 自动旋转摆正 · 导出标准命名与报表</p>
-      </div>
-      <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
-        <span class="badge-pure-web">纯前端 PP-OCRv6 (Web-Native)</span>
-        <span style="font-size: 11px; color: var(--muted);">100% 浏览器内存运行 · 无需后端</span>
-      </div>
+      <h1>医疗单据 OCR <span>工作台</span></h1>
+      <span class="privacy-note"><i data-lucide="shield-check" aria-hidden="true"></i>图片在本机处理</span>
     </header>
 
-    <!-- 上传与参数设置卡片 -->
-    <section class="card">
-      <div id="dropzone" class="dropzone">
-        <svg class="dropzone-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/>
-        </svg>
-        <div class="dropzone-text">点击或将发票/病历图片拖拽到此处</div>
-        <div class="dropzone-hint">支持 JPG、PNG、WebP、BMP 等格式，支持多选</div>
-        <input type="file" id="fileInput" multiple accept="image/*" style="display: none;">
-      </div>
-
+    <section class="intake" aria-label="选择单据">
+      <button id="dropzone" class="dropzone" type="button">
+        <i data-lucide="image-plus" aria-hidden="true"></i>
+        <span><strong id="uploadLabel">选择或拖入单据图片</strong><small>发票 / 病历 · 支持多选</small></span>
+        <span class="upload-action">选择图片</span>
+      </button>
+      <input type="file" id="fileInput" multiple accept="image/*" hidden>
       <div class="controls-bar">
-        <div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: center;">
-          <div class="form-group">
-            <label class="form-label" for="yearInput">发票年份：</label>
-            <input type="number" id="yearInput" class="form-input" style="width: 90px;" min="2000" max="2100" value="2026">
-          </div>
-
-          <div class="form-group">
-            <label class="form-label" for="modelSelect">OCR 模型：</label>
-            <select id="modelSelect" class="form-select">
-              <option value="v6-small" selected>PP-OCRv6 small (推荐高精度)</option>
-              <option value="v6-tiny">PP-OCRv6 tiny (极速轻量)</option>
-              <option value="v5-mobile">PP-OCRv5 mobile (兼容型)</option>
-            </select>
-          </div>
+        <div class="config-fields">
+          <label class="form-group" for="yearInput"><span>年份</span><input type="number" id="yearInput" class="form-input year-input" min="2000" max="2100" value="2026"></label>
+          <label class="form-group" for="modelSelect"><span>模型</span><select id="modelSelect" class="form-select"><option value="v6-small">PP-OCRv6 small</option><option value="v6-tiny">PP-OCRv6 tiny</option><option value="v5-mobile">PP-OCRv5 mobile</option></select></label>
         </div>
-
         <div class="actions">
-          <button id="btnPause" class="btn btn-secondary" style="display: none;">暂停识别</button>
-          <button id="btnCancel" class="btn btn-danger" style="display: none;">终止任务</button>
-          <button id="btnReset" class="btn btn-secondary" disabled>清空重置</button>
-          <button id="btnStart" class="btn btn-primary" disabled>开始批量识别</button>
+          <button id="btnReset" class="btn btn-secondary icon-btn" disabled aria-label="清空批次" title="清空批次"><i data-lucide="trash-2" aria-hidden="true"></i></button>
+          <button id="btnPause" class="btn btn-secondary" hidden>暂停</button>
+          <button id="btnCancel" class="btn btn-danger" hidden>终止</button>
+          <button id="btnStart" class="btn btn-primary" disabled>开始识别</button>
         </div>
       </div>
     </section>
 
-    <!-- 进度显示区域 -->
-    <section id="progressSection" class="card progress-card" style="display: none;">
-      <div class="progress-header">
-        <span id="progressStatus" class="progress-status">准备识别...</span>
-        <span id="progressText" style="font-weight: 600; font-variant-numeric: tabular-nums;">0 / 0</span>
-      </div>
-      <div class="progress-track">
-        <div id="progressFill" class="progress-fill"></div>
-      </div>
+    <section id="progressSection" class="progress-section" style="display:none" aria-label="识别进度">
+      <div class="progress-header"><span id="progressStatus" role="status" aria-live="polite">准备识别</span><span id="progressText">0 / 0</span></div>
+      <div class="progress-track"><div id="progressFill" class="progress-fill"></div></div>
     </section>
 
-    <!-- 统计看板 -->
-    <section id="summarySection" style="display: none;">
-      <div class="summary-grid">
-        <div class="stat-box">
-          <div class="stat-label">发票总张数</div>
-          <div id="statInvoices" class="stat-value accent">0 张</div>
-        </div>
-        <div class="stat-box">
-          <div class="stat-label">发票总金额</div>
-          <div id="statAmount" class="stat-value accent">0.00 元</div>
-        </div>
-        <div class="stat-box">
-          <div class="stat-label">病历总张数</div>
-          <div id="statMedical" class="stat-value">0 张</div>
-        </div>
-        <div class="stat-box">
-          <div class="stat-label">未识别/未计入</div>
-          <div id="statUnknown" class="stat-value" style="color: var(--danger);">0 张</div>
-        </div>
+    <section id="summarySection" class="batch-summary" style="display:none" aria-label="批次统计">
+      <div class="summary-metrics">
+        <div><span>发票金额</span><strong id="statAmount">0 元</strong></div>
+        <div><span>发票</span><strong id="statInvoices">0 张</strong></div>
+        <div><span>病历</span><strong id="statMedical">0 张</strong></div>
+        <div><span>未识别</span><strong id="statUnknown">0 张</strong></div>
       </div>
+      <div id="exportsToolbar" class="exports-toolbar" style="display:none">
+        <details class="export-menu"><summary class="btn btn-secondary">导出报表 <i data-lucide="chevron-down" aria-hidden="true"></i></summary><div class="export-options"><button id="btnExportCsv" class="menu-item">CSV 表格</button><button id="btnExportJson" class="menu-item">JSON 数据</button><button id="btnExportMd" class="menu-item">Markdown 汇总</button></div></details>
+        <button id="btnDownloadZip" class="btn btn-primary"><i data-lucide="download" aria-hidden="true"></i>下载全部</button>
+      </div>
+      <details class="daily-summary"><summary>每日小结</summary><div id="dailyRows"></div></details>
     </section>
 
-    <!-- 导出工具栏 -->
-    <section id="exportsToolbar" class="exports-toolbar" style="display: none;">
-      <div>
-        <strong style="font-size: 13px;">批次处理已完成</strong>
-        <span style="font-size: 12px; color: var(--muted); margin-left: 6px;">请人工核对金额、日期和姓名；高置信度也可能识别错误。</span>
+    <section id="resultsSection" class="results-section" style="display:none">
+      <div class="results-toolbar">
+        <div class="results-heading"><h2>单据明细</h2><span id="reviewCount">等待识别</span></div>
+        <div class="result-filters"><label class="search-field"><i data-lucide="search" aria-hidden="true"></i><input id="searchInput" type="search" placeholder="搜索姓名、日期、文件名" aria-label="搜索单据"></label><select id="reviewFilter" class="form-select" aria-label="筛选核对状态"><option value="all">全部单据</option><option value="pending">待核对</option><option value="reviewed">已核对</option><option value="unknown">未识别</option></select></div>
       </div>
-      <div class="export-buttons">
-        <button id="btnExportCsv" class="btn btn-outline">导出 CSV 报表</button>
-        <button id="btnExportJson" class="btn btn-outline">导出 JSON</button>
-        <button id="btnExportMd" class="btn btn-outline">导出 Markdown</button>
-        <button id="btnDownloadZip" class="btn btn-primary">
-          <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
-          </svg>
-          一键下载完整 ZIP 包
-        </button>
-      </div>
+      <p class="review-note">置信度是模型分数，不能保证字段正确。请核对金额、日期与姓名。</p>
+
+      <section id="reviewPanel" class="review-panel" hidden aria-labelledby="reviewTitle">
+        <div class="review-header"><h3 id="reviewTitle">核对单据</h3><div class="actions"><button id="reviewPrevious" class="btn btn-secondary icon-btn" aria-label="上一张" title="上一张"><i data-lucide="chevron-left" aria-hidden="true"></i></button><span id="reviewPosition"></span><button id="reviewNext" class="btn btn-secondary icon-btn" aria-label="下一张" title="下一张"><i data-lucide="chevron-right" aria-hidden="true"></i></button><button id="closeReview" class="btn btn-secondary icon-btn" aria-label="关闭核对区" title="关闭核对区"><i data-lucide="x" aria-hidden="true"></i></button></div></div>
+        <div class="review-workspace">
+          <button id="reviewImageButton" class="review-image-button" aria-label="放大原图"><img id="reviewImage" alt="当前核对单据"><span>放大原图</span></button>
+          <form id="reviewForm" class="review-form">
+            <p id="reviewFilename" class="document-filename"></p>
+            <div class="review-scores"><div><span>文字置信度</span><strong id="textScore">未提供</strong></div><div><span>金额行置信度</span><strong id="amountScore">未提供</strong></div></div>
+            <p id="reviewWarning" class="review-warning"></p>
+            <div class="review-fields"><label>日期<input id="reviewDate" class="form-input" type="date" required></label><label>姓名<input id="reviewName" class="form-input" required maxlength="40"></label><label id="reviewAmountLabel">总金额（元）<input id="reviewAmount" class="form-input" type="number" min="0.01" step="0.01"></label></div>
+            <details class="ocr-disclosure"><summary>识别文字与输出文件名</summary><p id="reviewOutput" class="document-filename"></p><pre id="reviewRawText"></pre></details>
+            <p id="reviewError" class="review-error" role="alert"></p>
+            <div class="review-form-actions"><button class="btn btn-secondary" type="submit" name="save">保存修改</button><button class="btn btn-primary" type="submit" name="confirm">确认核对，下一张</button></div>
+          </form>
+        </div>
+      </section>
+
+      <div class="table-wrapper"><table class="results-table"><thead><tr><th class="preview-col">预览</th><th>单据</th><th>类型</th><th>日期</th><th>金额（元）</th><th>姓名</th><th class="technical-col">旋转</th><th class="technical-col">输出文件名</th><th class="action-col">下载</th><th>置信度 / 核对</th></tr></thead><tbody id="resultsTableBody"></tbody></table></div>
+      <p id="filterEmpty" class="filter-empty" hidden>没有符合条件的单据</p>
     </section>
+  </main>
 
-    <!-- 识别明细列表 -->
-    <section id="resultsSection" class="card" style="display: none; padding: 16px;">
-      <h3 style="font-size: 15px; margin-bottom: 12px; font-weight: 600;">批次单据明细</h3>
-      <div class="table-wrapper">
-        <table class="results-table">
-          <thead>
-            <tr>
-              <th style="width: 50px;">预览</th>
-              <th>原文件名</th>
-              <th style="width: 80px;">类型</th>
-              <th style="width: 90px;">日期</th>
-              <th style="width: 90px;">金额</th>
-              <th style="width: 80px;">姓名</th>
-              <th style="width: 100px;">方向纠偏</th>
-              <th>输出文件名 (重命名)</th>
-              <th style="width: 90px;">操作</th>
-              <th style="min-width: 200px;">置信度 / 人工核对</th>
-            </tr>
-          </thead>
-          <tbody id="resultsTableBody">
-            <!-- 动态行内容 -->
-          </tbody>
-        </table>
-      </div>
-    </section>
-  </div>
-
-  <!-- 图片大图预览模态弹窗 -->
-  <div id="previewModal" class="modal-backdrop">
-    <div class="modal-content">
-      <div class="modal-header">
-        <span id="modalTitle" style="font-weight: 600; font-size: 14px;">原图预览</span>
-        <button id="btnCloseModal" class="btn-close">&times;</button>
-      </div>
-      <div class="modal-body">
-        <img id="modalImg" class="modal-img" src="" alt="预览图">
-      </div>
-    </div>
-  </div>
-
-  <!-- 引入纯前端主模块 -->
+  <dialog id="previewModal" class="image-dialog" aria-labelledby="modalTitle"><div class="modal-header"><h2 id="modalTitle">原图预览</h2><button id="btnCloseModal" class="btn btn-secondary icon-btn" aria-label="关闭预览" title="关闭预览"><i data-lucide="x" aria-hidden="true"></i></button></div><div class="modal-body"><img id="modalImg" alt="单据原图"></div></dialog>
   <script type="module" src="js/app.js"></script>
 </body>
 </html>

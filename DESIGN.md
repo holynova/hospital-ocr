@@ -1,50 +1,25 @@
-# Hospital invoice OCR interface
+# Hospital OCR Workbench
 
-## Visual theme and atmosphere
+The interface is a compact, task-focused medical document workbench. Preserve batch recognition, source comparison, correction and local exports. Avoid marketing copy, decorative cards and repeated technical descriptions.
 
-This is a quiet, dense local workbench for processing medical invoices. Warm paper surfaces, dark ink typography, and restrained teal status color keep the interface legible without making private documents feel like dashboard decoration.
+## Visual System
 
-## Color palette and roles
+Use a light neutral canvas (`#f5f7f7`) and white work surfaces, ink text (`#202d31`), secondary text (`#5d6b71`) and restrained teal (`#087969`) for actions. Red communicates unresolved exceptions. Blue identifies medical records. Keep borders (`#d9e1e3`) subtle and avoid section shadows.
 
-- `--canvas: oklch(0.965 0.008 92)`: warm page background.
-- `--surface: oklch(0.992 0.004 92)`: primary working surface.
-- `--surface-muted: oklch(0.935 0.009 92)`: sidebar and secondary controls.
-- `--ink: oklch(0.245 0.018 205)`: primary text.
-- `--muted: oklch(0.49 0.016 205)`: secondary text.
-- `--accent: oklch(0.50 0.105 174)`: progress and primary actions.
-- `--danger: oklch(0.52 0.17 27)`: destructive actions and failures.
+Use system sans-serif text. Product title is 22px, section headings 16px, data 13px and supporting labels 12px. Letter spacing remains zero; numeric values use tabular figures. Control radii are 4px, upload and image-dialog radii 6px. Use Lucide icons with accessible labels on icon-only buttons.
 
-## Typography rules
+## Layout
 
-Use the native macOS text stack, followed by PingFang SC for Chinese. The interface favors compact 13–15px text, tabular numerals, and a 30px product title. Chinese text keeps generous line height and no negative letter spacing.
+One fluid workspace, capped at 1320px. Upload and settings occupy a compact band. Batch totals and export actions share a flat row. Secondary export formats and daily totals are disclosed on demand.
 
-## Component styling
+The results table prioritizes original document, type, date, total amount, name and review state. Do not repeat normalized output filenames or long review warnings in each row. Filters include pending, reviewed and unknown records. Search covers source/output filenames, name and date.
 
-Buttons use an 8px radius, clear focus rings, and a subtle press scale. Inputs and drop targets use background steps rather than decorative gradients. Tables stay flush to the workspace and use real row dividers rather than card-per-row styling.
+An inline review workspace shows the document alongside editable date, name and total amount. Confidence, warnings and raw OCR text belong here. Confirmation advances to the next unreviewed record. Keep the enlarged image in a native dialog with keyboard dismissal and focus restoration.
 
-## Layout principles
+## Responsive and Interaction
 
-Desktop uses a 280px history rail and a flexible workspace. The main content is organized by the work sequence: upload, batch status, summary, results. Spacing follows 4, 8, 12, 16, 24, 32, and 48px.
+Below 680px, document rows become a structured list and review image/fields stack vertically. Controls remain at least 42px high. Long filenames and warnings wrap within their containers. Avoid page-level horizontal scrolling.
 
-## Depth and elevation
+Progress is visible during recognition; completed batch metrics replace redundant completion messages. Disable intake settings while processing. Keep search, filtering and review counts synchronized after edits. Rebuild output filenames, totals and exports from edited records. Confirm before clearing or replacing completed review work.
 
-The sidebar and canvas use distinct background lightness. Only the upload surface and sticky action bar receive a restrained shadow. Data sections remain flat.
-
-## Do and do not
-
-- Keep the current batch and its progress visible.
-- Use status color only where status is communicated.
-- Preserve filenames and errors without silent truncation.
-- Do not add charts, gradients, glass effects, or marketing copy.
-- Do not hide failed items or destructive consequences.
-
-## Responsive behavior
-
-Below 800px the history rail becomes a horizontal batch strip above the workspace. Result rows become compact two-column blocks. All targets remain at least 40px tall and the layout supports a 375px viewport.
-
-## Agent prompt guide
-
-- Primary action: `oklch(0.50 0.105 174)`, white text, 8px radius, 44px height, 600 weight.
-- Result table: warm white background, 1px `oklch(0.87 0.012 92)` row dividers, 13px body text, tabular numeric columns.
-- Status pill: 6px radius, 12px text, tinted background derived from its semantic color, no shadow.
-
+Confidence is a model score, not the probability a field is correct. Preserve this distinction and keep failed or unknown records visible. All real document test artifacts remain local and excluded from Git.

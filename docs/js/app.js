@@ -55,6 +55,14 @@ let state = {
 
 // 初始化事件绑定
 function initApp() {
+  updateIcons();
+  document.getElementById("searchInput").addEventListener("input", filterResults);
+  document.getElementById("reviewFilter").addEventListener("change", filterResults);
+  document.getElementById("reviewForm").addEventListener("submit", saveReview);
+  document.getElementById("closeReview").addEventListener("click", closeReview);
+  document.getElementById("reviewPrevious").addEventListener("click", () => openReview(reviewIndex - 1));
+  document.getElementById("reviewNext").addEventListener("click", () => openReview(reviewIndex + 1));
+  document.getElementById("reviewImageButton").addEventListener("click", () => openModal(reviewUrl, state.records[reviewIndex]?.originalName || "原图"));
   // 设置默认年份
   yearInput.value = new Date().getFullYear().toString();
 
@@ -92,16 +100,19 @@ function initApp() {
   btnExportCsv.addEventListener("click", () => {
     if (state.records.length) {
       triggerDownload(makeCsv(state.records), "summary.csv", "text/csv;charset=utf-8;");
+      document.querySelector(".export-menu").open = false;
     }
   });
   btnExportJson.addEventListener("click", () => {
     if (state.summary) {
       triggerDownload(JSON.stringify(state.summary, null, 2), "summary.json", "application/json");
+      document.querySelector(".export-menu").open = false;
     }
   });
   btnExportMd.addEventListener("click", () => {
     if (state.summary) {
       triggerDownload(makeMarkdown(state.summary), "summary.md", "text/markdown;charset=utf-8;");
+      document.querySelector(".export-menu").open = false;
     }
   });
 
@@ -129,7 +140,13 @@ function handleFilesSelected(newFiles) {
     return;
   }
 
+  if (state.records.length && !confirm("替换当前批次？请先下载需要保留的结果。")) return;
+  closeReview();
+  document.getElementById("searchInput").value = "";
+  document.getElementById("reviewFilter").value = "all";
   state.files = filtered;
+  state.summary = null;
+  document.getElementById("uploadLabel").textContent = `已选择 ${filtered.length} 张单据`;
   state.records = [];
   state.rotatedBlobs.clear();
   clearPreviewUrls();
@@ -144,6 +161,7 @@ function handleFilesSelected(newFiles) {
   btnReset.disabled = false;
 
   renderInitialTable();
+  filterResults();
   summarySection.style.display = "none";
   exportsToolbar.style.display = "none";
   progressSection.style.display = "none";
@@ -160,7 +178,7 @@ function renderInitialTable() {
 
     tr.innerHTML = `
       <td>
-        <img src="${previewUrl}" class="thumb-preview" alt="预览" data-idx="${idx}" />
+        <button class="thumb-button" aria-label="查看单据原图"><img src="${previewUrl}" class="thumb-preview" alt="单据缩略图" data-idx="${idx}" /></button>
       </td>
       <td>${escapeHtml(file.name)}</td>
       <td><span class="pill">等待识别</span></td>
@@ -174,9 +192,9 @@ function renderInitialTable() {
     `;
     resultsTableBody.appendChild(tr);
 
-    tr.querySelector(".thumb-preview").addEventListener("click", () => {
+    tr.querySelector(".thumb-button").onclick = () => {
       openModal(previewUrl, file.name);
-    });
+    };
   });
 }
 
@@ -187,12 +205,12 @@ function togglePause() {
     btnPause.textContent = "继续识别";
     btnPause.classList.add("btn-primary");
     btnPause.classList.remove("btn-secondary");
-    progressStatus.textContent = "⏸️ 批次识别已暂停，点击“继续识别”恢复处理。";
+    progressStatus.textContent = "识别已暂停";
   } else {
     btnPause.textContent = "暂停识别";
     btnPause.classList.remove("btn-primary");
     btnPause.classList.add("btn-secondary");
-    progressStatus.textContent = "▶️ 正在恢复批次处理...";
+    progressStatus.textContent = "正在继续识别...";
   }
 }
 
@@ -203,14 +221,26 @@ function cancelProcessing() {
     state.isPaused = false;
     btnCancel.disabled = true;
     btnCancel.textContent = "正在终止...";
-    progressStatus.textContent = "🛑 正在终止批次任务...";
+    progressStatus.textContent = "正在终止任务...";
   }
 }
 
 async function startBatchProcessing() {
   if (state.files.length === 0 || state.isProcessing) return;
+  if (state.records.length && !confirm("重新识别会替换当前结果和人工修改，是否继续？")) return;
 
+  closeReview();
+  state.records = [];
+  state.summary = null;
+  state.rotatedBlobs.clear();
+  summarySection.style.display = "none";
+  renderInitialTable();
   state.isProcessing = true;
+  dropzone.disabled = true;
+  yearInput.disabled = true;
+  modelSelect.disabled = true;
+  btnPause.hidden = false;
+  btnCancel.hidden = false;
   state.isPaused = false;
   state.isCancelled = false;
 
@@ -350,7 +380,7 @@ async function startBatchProcessing() {
     statMedical.textContent = `${state.summary.medicalRecordCount} 张`;
     statUnknown.textContent = `${state.summary.unknownCount} 张`;
 
-    summarySection.style.display = "block";
+    summarySection.style.display = "grid";
     exportsToolbar.style.display = "flex";
   }
 
@@ -363,8 +393,13 @@ async function startBatchProcessing() {
   dropzone.style.pointerEvents = "auto";
   state.isProcessing = false;
   state.isPaused = false;
+  dropzone.disabled = false;
+  yearInput.disabled = false;
+  modelSelect.disabled = false;
+  btnPause.hidden = true;
+  btnCancel.hidden = true;
 
-  state.records.forEach((record, index) => updateTableRow(document.getElementById(`row-${index}`), record, index));
+  if (state.records.length) refreshBatch();
 
   if (state.isCancelled) {
     progressFill.style.background = "var(--warning)";
@@ -373,139 +408,181 @@ async function startBatchProcessing() {
     progressFill.style.width = "100%";
     progressFill.style.background = "var(--accent)";
     progressText.textContent = `${total} / ${total}`;
-    progressStatus.textContent = `批次识别完成！共 ${state.summary ? state.summary.totalCount : 0} 张发票，${state.summary ? state.summary.medicalRecordCount : 0} 张病历。`;
+    progressStatus.textContent = "识别完成";
+    progressSection.style.display = "none";
+    btnStart.textContent = "重新识别";
   }
 }
 
 function updateTableRow(row, record, idx) {
   if (!row) return;
-
-  const kindBadge = getKindBadge(record.kind);
-  const amountStr = record.amount !== null && record.amount !== undefined ? `${formatMoney(record.amount)} 元` : "-";
-  const rotationStr = record.rotation ? `<span class="pill pill-rotation">${record.rotation}° (已摆正)</span>` : "0°";
-  const outputNameStr = record.outputName ? escapeHtml(record.outputName) : "-";
-
-  row.children[1].textContent = record.originalName;
-  row.children[2].innerHTML = kindBadge;
-  row.children[3].textContent = record.date;
-  row.children[4].textContent = amountStr;
+  row.children[1].innerHTML = `<span class="document-title">${escapeHtml(record.originalName)}</span>${record.rotation ? `<span class="rotation-label">已旋转 ${record.rotation}°</span>` : ""}`;
+  row.children[2].innerHTML = getKindBadge(record.kind);
+  row.children[3].textContent = record.date.replace(/^(\d{4})(\d{2})(\d{2})$/, "$1-$2-$3");
+  row.children[4].textContent = record.amount == null ? "—" : formatMoney(record.amount);
   row.children[5].textContent = record.name;
-  row.children[6].innerHTML = rotationStr;
-  row.children[7].innerHTML = `<span style="font-family: monospace; font-size: 12px;">${outputNameStr}</span>`;
-
-  const confidenceCell = row.children[9];
-  confidenceCell.replaceChildren();
-  const score = document.createElement("div");
-  const percent = value => Number.isFinite(value) ? `${(value * 100).toFixed(1)}%` : "未提供";
-  score.textContent = `文字：${percent(record.confidence)} / 金额行：${percent(record.amountConfidence)}`;
-  score.title = "模型分数，不代表金额、姓名或日期正确的概率；金额行分数也不是金额字段正确率。";
-  confidenceCell.append(score);
-  const warning = document.createElement("div");
-  const reasons = [...(record.reviewReasons || [])];
-  if (!Number.isFinite(record.confidence)) reasons.push("模型未提供置信度");
-  else if (record.confidence < 0.9) reasons.push("文字置信度低于90%");
-  if (record.amountConfidence !== null && Number.isFinite(record.amountConfidence) && record.amountConfidence < 0.9) reasons.push("金额行置信度低于90%");
-  warning.textContent = `${record.amountSource || ""} ${reasons.join("；") || "建议核对原图"}`;
-  warning.style.color = reasons.length ? "var(--danger)" : "var(--muted)";
-  confidenceCell.append(warning);
-  const details = document.createElement("details");
-  const label = document.createElement("summary");
-  label.textContent = "查看识别文字";
-  const rawText = document.createElement("pre");
-  rawText.textContent = record.text || "没有识别文字";
-  rawText.style.cssText = "white-space:pre-wrap;max-width:320px;max-height:220px;overflow:auto;font-size:12px;";
-  details.append(label, rawText);
-  confidenceCell.append(details);
-  const reviewLabel = document.createElement("label");
-  const reviewed = document.createElement("input");
-  reviewed.type = "checkbox";
-  reviewed.checked = Boolean(record.reviewed);
-  reviewed.disabled = state.isProcessing;
-  reviewed.addEventListener("change", () => { record.reviewed = reviewed.checked; state.summary = buildSummary(state.records); });
-  reviewLabel.append(reviewed, document.createTextNode(" 已人工核对"));
-  confidenceCell.append(reviewLabel);
-  if (record.kind === "invoice") {
-    const edit = document.createElement("button");
-    edit.className = "btn btn-outline";
-    edit.textContent = "修改金额";
-    edit.disabled = state.isProcessing;
-    edit.addEventListener("click", () => {
-      edit.disabled = true;
-      const form = document.createElement("form");
-      const input = document.createElement("input");
-      input.type = "number";
-      input.min = "0.01";
-      input.step = "0.01";
-      input.required = true;
-      input.value = record.amount === null ? "" : String(record.amount);
-      input.setAttribute("aria-label", "人工核对总金额");
-      input.className = "form-input";
-      input.style.width = "110px";
-      const save = document.createElement("button");
-      save.type = "submit";
-      save.className = "btn btn-outline";
-      save.textContent = "保存金额";
-      const cancel = document.createElement("button");
-      cancel.type = "button";
-      cancel.className = "btn btn-outline";
-      cancel.textContent = "取消";
-      cancel.addEventListener("click", () => { form.remove(); edit.disabled = false; });
-      form.append(input, save, cancel);
-      form.addEventListener("submit", event => {
-        event.preventDefault();
-        editAmount(record, input.value);
-      });
-      confidenceCell.append(form);
-      input.focus();
-    });
-    confidenceCell.append(edit);
-  }
-
-  // 操作列 (单文件下载) 与缩略图摆正更新
+  const cell = row.children[9];
+  cell.innerHTML = `<div class="review-cell"><span class="confidence-value" title="文字置信度，非字段正确率">${formatConfidence(record.confidence)}</span><button class="review-link ${!record.reviewed && reviewWarnings(record).length ? "needs-attention" : ""}" ${state.isProcessing ? "disabled" : ""}>${record.reviewed ? "已核对" : reviewWarnings(record).length ? "需关注 · 核对" : "待核对"}</button></div>`;
+  cell.querySelector("button").addEventListener("click", () => openReview(idx));
   const actionCell = row.children[8];
-  if (record.outputName && state.rotatedBlobs.has(record.outputName)) {
-    const correctedBlob = state.rotatedBlobs.get(record.outputName);
-    const correctedUrl = URL.createObjectURL(correctedBlob);
-
-    // 如果方向被校正过，更新缩略图和点击弹窗为摆正后的正向图片
-    const thumb = row.querySelector(".thumb-preview");
-    if (thumb && record.rotation !== 0) {
-      thumb.src = correctedUrl;
-      thumb.onclick = () => openModal(correctedUrl, record.outputName);
-    }
-
-    actionCell.innerHTML = `<button class="btn btn-outline" style="padding: 3px 8px; font-size: 12px;" data-output="${record.outputName}">下载图片</button>`;
-    actionCell.querySelector("button").addEventListener("click", () => {
-      triggerDownload(correctedBlob, record.outputName);
-    });
-  } else {
-    actionCell.innerHTML = `<span class="pill">完成</span>`;
+  actionCell.replaceChildren();
+  const blob = state.rotatedBlobs.get(record.outputName);
+  if (blob) {
+    const download = document.createElement("button");
+    download.className = "btn btn-secondary icon-btn";
+    download.setAttribute("aria-label", "下载此单据");
+    download.title = "下载此单据";
+    download.innerHTML = '<i data-lucide="download" aria-hidden="true"></i>';
+    download.addEventListener("click", () => triggerDownload(blob, record.outputName));
+    actionCell.append(download);
   }
+  const preview = row.querySelector(".thumb-button");
+  if (preview) preview.onclick = () => state.isProcessing ? openModal(state.previewUrls.get(record.originalName), record.originalName) : openReview(idx);
+  updateIcons(row);
 }
 
-function editAmount(record, value) {
-  if (state.isProcessing) return;
-  const text = value.trim();
-  if (!/^\d+(?:\.\d{1,2})?$/.test(text) || !Number.isFinite(Number(text)) || Number(text) <= 0) {
-    alert("请输入大于0、最多两位小数的金额。");
-    return;
-  }
-  record.originalOcrAmount ??= record.amount;
-  record.amount = Number(text);
-  record.amountSource = "人工修改";
-  record.amountConfidence = null;
-  record.reviewReasons = ["金额已人工修改，仍请核对日期和姓名"];
-  record.reviewed = false;
+function formatConfidence(value) {
+  return Number.isFinite(value) ? `${(value * 100).toFixed(1)}%` : "未提供";
+}
+
+function reviewWarnings(record) {
+  const reasons = [...(record.reviewReasons || [])];
+  if (!Number.isFinite(record.confidence)) reasons.push("没有文字置信度");
+  else if (record.confidence < 0.9) reasons.push("文字置信度低于90%");
+  if (Number.isFinite(record.amountConfidence) && record.amountConfidence < 0.9) reasons.push("金额行置信度低于90%");
+  if (record.name === "未知姓名") reasons.push("姓名未识别");
+  if (record.date === "unknown-date") reasons.push("日期未识别");
+  if (record.kind === "unknown") reasons.push("单据类型未识别");
+  return reasons;
+}
+
+function updateIcons(root = document) {
+  if (window.lucide) window.lucide.createIcons({ root });
+}
+
+function refreshBatch() {
   const blobs = state.records.map(item => state.rotatedBlobs.get(item.outputName));
-  const usedNames = new Set();
   state.rotatedBlobs.clear();
+  const usedNames = new Set();
   state.records.forEach((item, index) => {
     generateUniqueOutputName(item, item.originalName, usedNames);
     if (blobs[index]) state.rotatedBlobs.set(item.outputName, blobs[index]);
     updateTableRow(document.getElementById(`row-${index}`), item, index);
   });
   state.summary = buildSummary(state.records);
+  statInvoices.textContent = `${state.summary.totalCount} 张`;
   statAmount.textContent = `${formatMoney(state.summary.totalAmount)} 元`;
+  statMedical.textContent = `${state.summary.medicalRecordCount} 张`;
+  statUnknown.textContent = `${state.summary.unknownCount} 张`;
+  const daily = document.getElementById("dailyRows");
+  daily.replaceChildren();
+  for (const [date, item] of Object.entries(state.summary.daily)) {
+    const row = document.createElement("span");
+    row.className = "daily-item";
+    row.textContent = `${date.replace(/^(\d{4})(\d{2})(\d{2})$/, "$1-$2-$3")} · ${item.count} 张 · ${formatMoney(item.amount)} 元`;
+    daily.append(row);
+  }
+  for (const [date, count] of Object.entries(state.summary.medicalDaily)) {
+    const row = document.createElement("span");
+    row.className = "daily-item";
+    row.textContent = `${date.replace(/^(\d{4})(\d{2})(\d{2})$/, "$1-$2-$3")} · 病历 ${count} 张`;
+    daily.append(row);
+  }
+  filterResults();
+}
+
+function filterResults() {
+  const query = document.getElementById("searchInput").value.trim().toLowerCase();
+  const filter = document.getElementById("reviewFilter").value;
+  let shown = 0;
+  state.files.forEach((file, index) => {
+    const record = state.records[index];
+    const text = record ? `${record.originalName} ${record.outputName} ${record.name} ${record.date} ${record.date.replace(/^(\d{4})(\d{2})(\d{2})$/, "$1-$2-$3")}` : file.name;
+    const matchesFilter = filter === "all" || (record && (filter === "pending" ? !record.reviewed : filter === "reviewed" ? record.reviewed : record.kind === "unknown"));
+    const visible = matchesFilter && text.toLowerCase().includes(query);
+    document.getElementById(`row-${index}`).hidden = !visible;
+    if (visible) shown++;
+  });
+  const pending = state.records.filter(r => !r.reviewed).length;
+  document.getElementById("reviewCount").textContent = state.records.length ? `${shown} / ${state.files.length} 张 · 待核对 ${pending} 张` : `${state.files.length} 张待识别`;
+  document.getElementById("filterEmpty").hidden = shown > 0;
+}
+
+let reviewIndex = -1;
+let reviewUrl = null;
+function openReview(index) {
+  const record = state.records[index];
+  if (!record || state.isProcessing) return;
+  reviewIndex = index;
+  const panel = document.getElementById("reviewPanel");
+  panel.hidden = false;
+  if (reviewUrl) URL.revokeObjectURL(reviewUrl);
+  const blob = state.rotatedBlobs.get(record.outputName) || state.files[index];
+  reviewUrl = URL.createObjectURL(blob);
+  document.getElementById("reviewImage").src = reviewUrl;
+  document.getElementById("reviewFilename").textContent = record.originalName;
+  document.getElementById("reviewPosition").textContent = `${index + 1} / ${state.records.length}`;
+  document.getElementById("reviewPrevious").disabled = index === 0;
+  document.getElementById("reviewNext").disabled = index === state.records.length - 1;
+  document.getElementById("textScore").textContent = formatConfidence(record.confidence);
+  document.getElementById("amountScore").textContent = formatConfidence(record.amountConfidence);
+  document.getElementById("reviewWarning").textContent = reviewWarnings(record).join("；");
+  document.getElementById("reviewDate").value = record.date.replace(/^(\d{4})(\d{2})(\d{2})$/, "$1-$2-$3");
+  document.getElementById("reviewName").value = record.name === "未知姓名" ? "" : record.name;
+  document.getElementById("reviewAmount").value = record.amount ?? "";
+  document.getElementById("reviewAmount").required = record.kind === "invoice";
+  document.getElementById("reviewAmountLabel").hidden = record.kind !== "invoice";
+  document.getElementById("reviewOutput").textContent = `输出：${record.outputName}${record.amountSource ? " · 金额来源：" + record.amountSource : ""}`;
+  document.getElementById("reviewRawText").textContent = record.text || "没有识别文字";
+  document.getElementById("reviewError").textContent = "";
+  document.getElementById("reviewError").style.color = "";
+  document.querySelector(".ocr-disclosure").open = false;
+  panel.scrollIntoView({ behavior: "auto", block: "nearest" });
+  document.getElementById("reviewDate").focus({preventScroll:true});
+}
+
+function closeReview() {
+  document.getElementById("reviewPanel").hidden = true;
+  if (reviewUrl) URL.revokeObjectURL(reviewUrl);
+  reviewUrl = null;
+  reviewIndex = -1;
+  document.getElementById("reviewImage").removeAttribute("src");
+}
+
+function saveReview(event) {
+  event.preventDefault();
+  const record = state.records[reviewIndex];
+  if (!record || state.isProcessing) return;
+  const date = document.getElementById("reviewDate").value.replaceAll("-", "");
+  const name = document.getElementById("reviewName").value.trim();
+  const amount = document.getElementById("reviewAmount").value.trim();
+  if (!/^\d{8}$/.test(date) || !name || (record.kind === "invoice" && (!/^\d+(?:\.\d{1,2})?$/.test(amount) || !Number.isFinite(Number(amount)) || Number(amount) <= 0))) {
+    document.getElementById("reviewError").textContent = "请填写有效的日期、姓名和总金额。";
+    return;
+  }
+  if (record.kind === "invoice" && Number(amount) !== record.amount) {
+    record.originalOcrAmount ??= record.amount;
+    record.amount = Number(amount);
+    record.amountSource = "人工修改";
+    record.amountConfidence = null;
+    record.reviewReasons = [];
+  }
+  record.date = date;
+  record.name = name;
+  const confirm = event.submitter?.name === "confirm";
+  record.reviewed = confirm;
+  const current = reviewIndex;
+  refreshBatch();
+  if (confirm) {
+    const next = state.records.findIndex((item,index) => index > current && !item.reviewed);
+    const remaining = next >= 0 ? next : state.records.findIndex(item => !item.reviewed);
+    if (remaining >= 0 && remaining !== current) openReview(remaining);
+    else closeReview();
+  } else {
+    openReview(current);
+    document.getElementById("reviewError").textContent = "修改已保存；确认核对后可继续下一张。";
+    document.getElementById("reviewError").style.color = "var(--accent)";
+  }
 }
 
 function getKindBadge(kind) {
@@ -523,7 +600,7 @@ async function handleDownloadZip() {
   if (state.records.length === 0 || state.rotatedBlobs.size === 0) return;
 
   btnDownloadZip.disabled = true;
-  const originalText = btnDownloadZip.textContent;
+  const originalText = btnDownloadZip.innerHTML;
   btnDownloadZip.textContent = "正在打包中...";
 
   try {
@@ -538,18 +615,23 @@ async function handleDownloadZip() {
     alert(`打包下载失败: ${err.message}`);
   } finally {
     btnDownloadZip.disabled = false;
-    btnDownloadZip.textContent = originalText;
+    btnDownloadZip.innerHTML = originalText;
   }
 }
 
 function resetBatch() {
   if (state.isProcessing) return;
+  if (state.records.length && !confirm("清空当前批次？请先下载需要保留的结果。")) return;
+  closeReview();
 
   state.files = [];
   state.records = [];
   state.rotatedBlobs.clear();
   clearPreviewUrls();
   state.summary = null;
+  document.getElementById("uploadLabel").textContent = "选择或拖入单据图片";
+  document.getElementById("searchInput").value = "";
+  document.getElementById("reviewFilter").value = "all";
 
   fileInput.value = "";
   btnStart.disabled = true;
@@ -573,12 +655,12 @@ function clearPreviewUrls() {
 function openModal(src, title) {
   modalImg.src = src;
   modalTitle.textContent = title;
-  previewModal.classList.add("active");
+  if (!previewModal.open) previewModal.showModal();
 }
 
 function closeModal() {
-  previewModal.classList.remove("active");
-  modalImg.src = "";
+  previewModal.close();
+  modalImg.removeAttribute("src");
 }
 
 function escapeHtml(str) {
