@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#f3efe5">
+  <title>医院票据 OCR</title>
+  <link rel="stylesheet" href="/static/app.css?v=5">
+</head>
+<body>
+  <a class="skip-link" href="#main-content">跳到主要内容</a>
+  <div class="app-shell">
+    <aside class="history-rail" aria-label="历史批次">
+      <header class="brand-block">
+        <span class="brand-mark" aria-hidden="true">票</span>
+        <div>
+          <p class="eyebrow">LOCAL OCR</p>
+          <p class="brand-name">票据工作台</p>
+        </div>
+      </header>
+
+      <div class="history-heading">
+        <h2>历史批次</h2>
+        <button class="icon-button" id="refresh-batches" type="button" aria-label="刷新历史批次" title="刷新历史批次">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20 11a8.1 8.1 0 0 0-14.8-4M4 4v5h5M4 13a8.1 8.1 0 0 0 14.8 4M20 20v-5h-5"/></svg>
+        </button>
+      </div>
+      <nav id="batch-list" class="batch-list" aria-live="polite"></nav>
+      <p id="history-empty" class="rail-empty" hidden>还没有批次。上传图片后，记录会保存在这台电脑上。</p>
+      <footer class="rail-footer">
+        <span class="local-dot" aria-hidden="true"></span>
+        图片与结果只保存在本机
+      </footer>
+    </aside>
+
+    <main id="main-content" class="workspace" tabindex="-1">
+      <header class="workspace-header">
+        <div>
+          <p class="eyebrow">HOSPITAL INVOICE OCR</p>
+          <h1>识别一批医院票据</h1>
+          <p class="workspace-intro">每次上传会建立一个独立批次。可以离开页面，处理进度和历史记录不会丢失。</p>
+        </div>
+        <div id="engine-state" class="engine-state" role="status">
+          <span class="engine-dot" aria-hidden="true"></span>
+          <span>PP-OCRv6 small</span>
+        </div>
+      </header>
+
+      <section class="upload-section" aria-labelledby="upload-title">
+        <div id="drop-zone" class="drop-zone">
+          <input id="file-input" type="file" accept="image/png,image/jpeg,image/webp,image/tiff,image/bmp" multiple hidden>
+          <div class="drop-copy">
+            <div class="upload-glyph" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/></svg>
+            </div>
+            <div>
+              <h2 id="upload-title">拖入图片，或选择文件</h2>
+              <p>支持 JPG、PNG、WebP、TIFF、BMP，单个批次最多 500 张。</p>
+            </div>
+          </div>
+          <div class="upload-actions">
+            <button id="choose-files" class="secondary-button" type="button">选择图片</button>
+            <span id="selection-summary" class="selection-summary">尚未选择图片</span>
+          </div>
+        </div>
+
+        <form id="upload-form" class="upload-settings">
+          <label>
+            <span>票据年份</span>
+            <input id="year-input" name="year" type="number" min="2000" max="2100" inputmode="numeric" required>
+          </label>
+          <label>
+            <span>识别模式</span>
+            <select id="model-input" name="model">
+              <option value="v6-small">准确优先 · PP-OCRv6 small</option>
+              <option value="v6-tiny">速度优先 · PP-OCRv6 tiny</option>
+              <option value="v5-mobile">兼容模式 · PP-OCRv5 mobile</option>
+            </select>
+          </label>
+          <button id="start-upload" class="primary-button" type="submit" disabled>
+            <span>创建批次并识别</span>
+          </button>
+        </form>
+        <p id="upload-error" class="inline-error" role="alert" hidden></p>
+      </section>
+
+      <section id="batch-panel" class="batch-panel" aria-labelledby="batch-title" hidden>
+        <div class="batch-toolbar">
+          <div>
+            <p id="batch-time" class="eyebrow">当前批次</p>
+            <h2 id="batch-title">批次</h2>
+          </div>
+          <div class="batch-actions">
+            <button id="retry-batch" class="secondary-button" type="button" hidden>重试失败项</button>
+            <button id="delete-batch" class="danger-button" type="button">删除批次</button>
+          </div>
+        </div>
+
+        <div class="progress-block">
+          <div class="progress-copy">
+            <div>
+              <span id="status-label" class="status-pill">等待处理</span>
+              <p id="progress-message">正在准备批次</p>
+            </div>
+            <strong id="progress-percent">0%</strong>
+          </div>
+          <div class="progress-track" role="progressbar" aria-label="批次处理进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <span id="progress-bar"></span>
+          </div>
+        </div>
+
+        <dl class="summary-strip">
+          <div><dt>已处理</dt><dd id="summary-completed">0 / 0</dd></div>
+          <div><dt>已经过</dt><dd id="summary-elapsed">0秒</dd></div>
+          <div><dt>平均识别</dt><dd id="summary-average">暂无</dd></div>
+          <div><dt>已识别发票</dt><dd id="summary-invoices">0</dd></div>
+          <div><dt>已识别病例</dt><dd id="summary-medical">0</dd></div>
+          <div><dt>未识别</dt><dd id="summary-unknown">0</dd></div>
+          <div class="summary-amount"><dt>发票合计</dt><dd id="summary-amount">¥0</dd></div>
+        </dl>
+
+        <div id="export-row" class="export-row" hidden>
+          <span>导出本批次</span>
+          <a data-export="zip" href="#">图片与报告 ZIP</a>
+          <a data-export="csv" href="#">CSV</a>
+          <a data-export="json" href="#">JSON</a>
+          <a data-export="markdown" href="#">Markdown</a>
+        </div>
+
+        <div class="results-heading">
+          <div>
+            <h3>识别结果</h3>
+            <p id="results-caption">按上传顺序显示</p>
+          </div>
+          <div class="pagination" aria-label="结果分页">
+            <button id="previous-page" class="icon-button" type="button" aria-label="上一页" disabled>
+              <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg>
+            </button>
+            <span id="page-label">第 1 页</span>
+            <button id="next-page" class="icon-button" type="button" aria-label="下一页" disabled>
+              <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="results-table-wrap">
+          <table class="results-table">
+            <thead>
+              <tr><th>图片</th><th>状态</th><th>类型</th><th>日期</th><th>金额</th><th>姓名</th><th>耗时</th></tr>
+            </thead>
+            <tbody id="results-body"></tbody>
+          </table>
+          <p id="results-empty" class="results-empty">任务正在进入队列。</p>
+        </div>
+      </section>
+
+      <section id="welcome-panel" class="welcome-panel">
+        <span class="section-number">01</span>
+        <div>
+          <h2>一批图片，一份独立记录</h2>
+          <p>上传后会逐张识别日期、金额和姓名，并自动区分发票与病例。结束后可下载重命名图片和完整汇总。</p>
+        </div>
+        <span class="section-number">02</span>
+        <div>
+          <h2>刷新或重启也不会丢失</h2>
+          <p>批次、进度、识别结果和原图都持久化在本机。中断的任务可以从历史记录中重新开始。</p>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="confirm-layer" class="confirm-layer" hidden>
+    <div class="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-description">
+      <p class="eyebrow">不可恢复</p>
+      <h2 id="confirm-title">删除这个批次？</h2>
+      <p id="confirm-description">原图、识别结果和导出文件都会从本机删除。</p>
+      <div class="confirm-actions">
+        <button id="cancel-delete" class="secondary-button" type="button">取消</button>
+        <button id="confirm-delete" class="danger-button danger-filled" type="button">确认删除</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="image-viewer" class="image-viewer" hidden>
+    <section class="viewer-shell" role="dialog" aria-modal="true" aria-labelledby="viewer-title" aria-describedby="viewer-hint">
+      <header class="viewer-toolbar">
+        <div class="viewer-heading">
+          <p class="eyebrow">原图预览</p>
+          <h2 id="viewer-title">图片</h2>
+        </div>
+        <div class="viewer-actions" aria-label="图片方向控制">
+          <button id="rotate-left" class="viewer-button" type="button" aria-label="向左旋转 90 度" title="向左旋转 90 度">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 8V3m0 0h5M4 3l3.6 3.6A8 8 0 1 1 5 15"/></svg>
+            <span>左转</span>
+          </button>
+          <button id="rotate-right" class="viewer-button" type="button" aria-label="向右旋转 90 度" title="向右旋转 90 度">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20 8V3m0 0h-5m5-0-3.6 3.6A8 8 0 1 0 19 15"/></svg>
+            <span>右转</span>
+          </button>
+          <button id="reset-rotation" class="viewer-button" type="button">恢复方向</button>
+          <button id="close-viewer" class="viewer-close" type="button" aria-label="关闭大图预览" title="关闭大图预览">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg>
+          </button>
+        </div>
+      </header>
+      <div id="viewer-stage" class="viewer-stage">
+        <img id="viewer-image" alt="" draggable="false">
+      </div>
+      <footer class="viewer-footer">
+        <span id="viewer-rotation">当前方向 0°</span>
+        <span id="viewer-hint">点击左右旋转，或使用键盘方向键。只改变查看方向，不修改原图。</span>
+      </footer>
+    </section>
+  </div>
+
+  <script src="/static/app.js?v=5" defer></script>
+</body>
+</html>

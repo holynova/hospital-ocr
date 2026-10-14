@@ -1,0 +1,25 @@
+{
+  "name": "hospital-ocr",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Pure in-browser Hospital Invoice and Medical Record OCR recognition tool (PP-OCRv6)",
+  "scripts": {
+    "start": "python3 -m http.server 3001 --directory docs",
+    "test": "node tests/test_standalone_modules.mjs",
+    "build:bundle": "npx esbuild docs/js/vendor-entry.js --bundle --format=esm --outfile=docs/js/paddle-ocr-bundle.js --target=es2022"
+  },
+  "keywords": [
+    "ocr",
+    "paddleocr",
+    "invoice-recognition",
+    "browser-ocr",
+    "webgpu"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "onnxruntime-web": "^1.23.2",
+    "ppu-paddle-ocr": "^6.4.0"
+  }
+}

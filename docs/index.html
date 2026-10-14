@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hospital Invoice OCR - 纯前端单批次版 (PP-OCRv6)</title>
+  <link rel="stylesheet" href="css/style.css">
+  <!-- 引入 JSZip (纯端侧打包工具) -->
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+</head>
+<body>
+  <div class="container">
+    <!-- 头部区域 -->
+    <header class="app-header">
+      <div>
+        <h1 class="brand-title">医疗发票与病历 OCR 工作台</h1>
+        <p class="brand-subtitle">纯前端单批次识别与自动归档 · 深度学习 PP-OCRv6 引擎 · 自动旋转摆正 · 导出标准命名与报表</p>
+      </div>
+      <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
+        <span class="badge-pure-web">纯前端 PP-OCRv6 (Web-Native)</span>
+        <span style="font-size: 11px; color: var(--muted);">100% 浏览器内存运行 · 无需后端</span>
+      </div>
+    </header>
+
+    <!-- 上传与参数设置卡片 -->
+    <section class="card">
+      <div id="dropzone" class="dropzone">
+        <svg class="dropzone-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/>
+        </svg>
+        <div class="dropzone-text">点击或将发票/病历图片拖拽到此处</div>
+        <div class="dropzone-hint">支持 JPG、PNG、WebP、BMP 等格式，支持多选</div>
+        <input type="file" id="fileInput" multiple accept="image/*" style="display: none;">
+      </div>
+
+      <div class="controls-bar">
+        <div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: center;">
+          <div class="form-group">
+            <label class="form-label" for="yearInput">发票年份：</label>
+            <input type="number" id="yearInput" class="form-input" style="width: 90px;" min="2000" max="2100" value="2026">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="modelSelect">OCR 模型：</label>
+            <select id="modelSelect" class="form-select">
+              <option value="v6-small" selected>PP-OCRv6 small (推荐高精度)</option>
+              <option value="v6-tiny">PP-OCRv6 tiny (极速轻量)</option>
+              <option value="v5-mobile">PP-OCRv5 mobile (兼容型)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button id="btnPause" class="btn btn-secondary" style="display: none;">暂停识别</button>
+          <button id="btnCancel" class="btn btn-danger" style="display: none;">终止任务</button>
+          <button id="btnReset" class="btn btn-secondary" disabled>清空重置</button>
+          <button id="btnStart" class="btn btn-primary" disabled>开始批量识别</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 进度显示区域 -->
+    <section id="progressSection" class="card progress-card" style="display: none;">
+      <div class="progress-header">
+        <span id="progressStatus" class="progress-status">准备识别...</span>
+        <span id="progressText" style="font-weight: 600; font-variant-numeric: tabular-nums;">0 / 0</span>
+      </div>
+      <div class="progress-track">
+        <div id="progressFill" class="progress-fill"></div>
+      </div>
+    </section>
+
+    <!-- 统计看板 -->
+    <section id="summarySection" style="display: none;">
+      <div class="summary-grid">
+        <div class="stat-box">
+          <div class="stat-label">发票总张数</div>
+          <div id="statInvoices" class="stat-value accent">0 张</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">发票总金额</div>
+          <div id="statAmount" class="stat-value accent">0.00 元</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">病历总张数</div>
+          <div id="statMedical" class="stat-value">0 张</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">未识别/未计入</div>
+          <div id="statUnknown" class="stat-value" style="color: var(--danger);">0 张</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 导出工具栏 -->
+    <section id="exportsToolbar" class="exports-toolbar" style="display: none;">
+      <div>
+        <strong style="font-size: 13px;">批次处理已完成</strong>
+        <span style="font-size: 12px; color: var(--muted); margin-left: 6px;">所有图片已自动校正旋转并重命名</span>
+      </div>
+      <div class="export-buttons">
+        <button id="btnExportCsv" class="btn btn-outline">导出 CSV 报表</button>
+        <button id="btnExportJson" class="btn btn-outline">导出 JSON</button>
+        <button id="btnExportMd" class="btn btn-outline">导出 Markdown</button>
+        <button id="btnDownloadZip" class="btn btn-primary">
+          <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+          </svg>
+          一键下载完整 ZIP 包
+        </button>
+      </div>
+    </section>
+
+    <!-- 识别明细列表 -->
+    <section id="resultsSection" class="card" style="display: none; padding: 16px;">
+      <h3 style="font-size: 15px; margin-bottom: 12px; font-weight: 600;">批次单据明细</h3>
+      <div class="table-wrapper">
+        <table class="results-table">
+          <thead>
+            <tr>
+              <th style="width: 50px;">预览</th>
+              <th>原文件名</th>
+              <th style="width: 80px;">类型</th>
+              <th style="width: 90px;">日期</th>
+              <th style="width: 90px;">金额</th>
+              <th style="width: 80px;">姓名</th>
+              <th style="width: 100px;">方向纠偏</th>
+              <th>输出文件名 (重命名)</th>
+              <th style="width: 90px;">操作</th>
+            </tr>
+          </thead>
+          <tbody id="resultsTableBody">
+            <!-- 动态行内容 -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <!-- 图片大图预览模态弹窗 -->
+  <div id="previewModal" class="modal-backdrop">
+    <div class="modal-content">
+      <div class="modal-header">
+        <span id="modalTitle" style="font-weight: 600; font-size: 14px;">原图预览</span>
+        <button id="btnCloseModal" class="btn-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <img id="modalImg" class="modal-img" src="" alt="预览图">
+      </div>
+    </div>
+  </div>
+
+  <!-- 引入纯前端主模块 -->
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
