@@ -138,6 +138,10 @@ h3 { font-size: 14px; font-weight: 600; }
 .review-form-actions { display: flex; gap: 8px; margin-top: auto; flex-wrap: wrap; }
 .image-dialog { width: min(1100px,94vw); max-height: 94vh; border: 0; padding: 0; border-radius: 6px; color: var(--ink); background: var(--surface); }
 .image-dialog::backdrop { background: #162b37b3; }
+.site-footer { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border); color: var(--muted); font-size: 12px; }
+.site-footer a { display: inline-flex; align-items: center; gap: 6px; color: var(--accent); text-decoration: none; min-height: 40px; }
+.site-footer a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.site-footer svg { width: 16px; height: 16px; }
 .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; gap: 16px; border-bottom: 1px solid var(--border); }
 .modal-header h2 { font-size: 13px; overflow-wrap: anywhere; }
 .modal-body { padding: 12px; text-align: center; }

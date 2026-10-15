@@ -3,10 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="在浏览器本地识别医疗发票与病历，核对日期、金额和姓名，批量重命名并导出汇总。">
   <title>医疗单据 OCR 工作台</title>
   <link rel="stylesheet" href="css/style.css">
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+  <script defer src="https://cloud.umami.is/script.js" data-website-id="e01c9f78-4607-4e60-b01c-77c8190b12b4"></script>
 </head>
 <body>
   <main class="container">
@@ -81,6 +83,7 @@
       <div class="table-wrapper"><table class="results-table"><thead><tr><th class="preview-col">预览</th><th>单据</th><th>类型</th><th>日期</th><th>金额（元）</th><th>姓名</th><th class="technical-col">旋转</th><th class="technical-col">输出文件名</th><th class="action-col">下载</th><th>置信度 / 核对</th></tr></thead><tbody id="resultsTableBody"></tbody></table></div>
       <p id="filterEmpty" class="filter-empty" hidden>没有符合条件的单据</p>
     </section>
+    <footer class="site-footer"><span>Hospital OCR · v1.0.1</span><a href="https://github.com/holynova/hospital-ocr" target="_blank" rel="noopener noreferrer"><i data-lucide="github" aria-hidden="true"></i>GitHub 源码</a></footer>
   </main>
 
   <dialog id="previewModal" class="image-dialog" aria-labelledby="modalTitle"><div class="modal-header"><h2 id="modalTitle">原图预览</h2><button id="btnCloseModal" class="btn btn-secondary icon-btn" aria-label="关闭预览" title="关闭预览"><i data-lucide="x" aria-hidden="true"></i></button></div><div class="modal-body"><img id="modalImg" alt="单据原图"></div></dialog>

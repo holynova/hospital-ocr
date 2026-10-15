@@ -45,6 +45,9 @@ tmp/
 temp/
 .cache/
 .impeccable/critique/
+.wrangler/
+.dev.vars
+.dev.vars.*
 
 inputs/
 outputs/

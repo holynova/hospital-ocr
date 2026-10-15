@@ -1,57 +1,42 @@
-# Hospital OCR
+# Hospital OCR / 医疗单据工作台
 
-在浏览器中批量识别医疗发票和病历图片，提取日期、金额与姓名，校正图片方向，生成重命名图片及汇总报表。
+中文：在浏览器本地批量识别发票与病历，提取日期、金额、姓名，校正方向并重命名图片。支持原图对照、置信度提示、人工核对及每日统计，导出 ZIP、CSV、JSON、Markdown。Windows、macOS、Linux 均可使用。首次加载需联网下载模型；模型分数不代表字段正确率，请核对后使用。
 
-[在线使用](https://holynova.github.io/hospital-ocr/)
+English: A local-processing browser workbench for medical invoices and records. Extract dates, totals and names, correct image orientation, review OCR confidence beside the source, edit fields and export renamed images with daily reports. Works on Windows, macOS and Linux. Models download on first use; confidence is not a guarantee of correctness.
 
-## 本地运行
+![真实页面截图，使用虚构演示单据 / App screenshot with fictional demo data](./assets/screenshot.png)
 
-安装 Python 3，然后在项目根目录运行：
+## 在线体验 / Live Demo
+
+- [Cloudflare Demo](https://hospital-ocr.xiaosang.cc/)（待上线验证 / pending verification）
+- [GitHub Repo](https://github.com/holynova/hospital-ocr)
+- [使用说明 / Usage](./USAGE.md)
+
+<img src="./assets/qr.png" width="160" alt="扫码访问 Hospital OCR / Scan for Hospital OCR">
+
+## 本地运行 / Run Locally
 
 ```bash
 python3 -m http.server 3001 --directory docs
 ```
 
-打开 http://localhost:3001/ 。也可以安装 Node.js 后运行 `npm start`。
+打开 / Open `http://localhost:3001/`。
 
-首次识别需要联网下载模型和运行时资源。建议使用最新的 Chrome 或 Edge；Windows、macOS 和 Linux 均可使用浏览器版，不需要安装 Python PaddleOCR 或配置独立显卡。
-
-## 使用
-
-1. 选择或拖入发票、病历图片。
-2. 选择模型并开始批量识别；任务支持暂停、继续和终止。
-3. 核对识别结果，下载图片 ZIP 或 CSV、JSON、Markdown 报表。
-
-明细支持搜索及待核对、已核对、未识别筛选。点击“核对”可对照原图编辑日期、姓名和总金额；确认后自动进入下一张待核对单据。修改会同步更新文件名、汇总和导出报表。
-
-核对区展示文字置信度和金额行置信度，它们是模型分数，不是字段正确的概率。分数低于90%、总额无法可靠识别、大小写总额冲突或关键字段缺失时会提示关注。原始识别文字及输出文件名可按需展开，每日小结和报表格式也集中在折叠菜单中。
-
-金额优先提取发票总额，并用中文大写金额交叉核对；存在总额字段却无法可靠读取时，不用诊察费或治疗费小计代替总额。CSV 和 JSON 导出保留置信度及核对状态。
-
-发票命名为 `YYYYMMDD-金额元-姓名.jpg`，病历命名为 `YYYYMMDD-病例-姓名.jpg`。同名图片会追加序号。汇总包含发票数量、总金额和每日小结。
-
-例如 `20240102-123.45元-张三.jpg` 与 `20240102-病例-李四.jpg`。这些姓名、日期与金额为虚构演示数据。
-
-## 数据与隐私
-
-GitHub Pages 部署的是 `docs/` 中的静态浏览器应用。图片和 OCR 结果在浏览器中处理，应用代码不将它们上传到识别服务器。模型、运行时和 ZIP 库仍需从外部服务下载。
-
-原始图片、识别报表、数据库和缓存不纳入版本管理。下载的报表及图片可能包含个人信息，请自行妥善保存。OCR 可能识别错误，姓名多数表决也可能影响多人混合批次，请核对结果后使用。
-
-这个公共项目从清理后的源代码建立全新 Git 历史，不包含原始私有项目的提交历史或个人单据。
-
-## 开发与测试
+## 测试与发布 / Test and Deploy
 
 ```bash
 npm ci
 npm test
-npm run build:bundle
+npm run deploy:check
+npm run deploy
 ```
 
-`docs/js/paddle-ocr-bundle.js` 为提交的浏览器依赖包。修改 `vendor-entry.js` 或更新依赖后需重新构建。
+Cloudflare Workers Static Assets · `hospital-ocr.xiaosang.cc` · v1.0.1
 
-可选 Python 后端与命令行代码位于 `server/`，依赖见 `server/requirements.txt`；它们不部署到 GitHub Pages。
+仅从 `main` 在本地手动部署 Cloudflare；已有 GitHub Pages 保留作回退。域名使用精确 Worker Route，因区域 Custom Domains 配额已满。
 
-## 发布
+Deploy manually from `main`. The existing GitHub Pages site remains a fallback. An exact Worker Route serves the custom hostname.
 
-仓库 Settings → Pages 的 Source 设置为 GitHub Actions。推送到 `main` 后，工作流运行模块测试并发布 `docs/`。
+图片和识别结果不上传识别服务器。页面使用 Umami 统计访问，不主动发送单据内容。截图中的单据及字段均为虚构演示数据。
+
+Images and OCR results are processed locally. Umami records page visits; the application does not send document contents to analytics. All document data in screenshots is fictional.
