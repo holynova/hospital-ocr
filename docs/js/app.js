@@ -2,7 +2,7 @@
  * 纯前端 Hospital Invoice OCR 主应用控制器
  */
 import { processOcrResult, fillMissingNames } from "./extractors.js";
-import { loadImage, rotateAndCorrectImage, generateUniqueOutputName, formatMoney } from "./image-utils.js";
+import { loadImage, rotateAndCorrectImage, generateUniqueOutputName, formatMoneyDisplay } from "./image-utils.js";
 import { buildSummary, makeCsv, makeMarkdown, triggerDownload, buildZipArchive } from "./reports.js";
 import { ocrEngine } from "./ocr-engine.js";
 
@@ -136,11 +136,14 @@ function handleFilesSelected(newFiles) {
   });
 
   if (filtered.length === 0) {
-    alert("请选择有效的图片文件 (JPG, PNG, WebP, BMP)。");
+    const err = document.getElementById("fileError");
+    err.textContent = "只支持图片文件（JPG、PNG、WebP、BMP、TIFF），请重新选择。";
+    err.hidden = false;
     return;
   }
 
   if (state.records.length && !confirm("替换当前批次？请先下载需要保留的结果。")) return;
+  document.getElementById("fileError").hidden = true;
   closeReview();
   document.getElementById("searchInput").value = "";
   document.getElementById("reviewFilter").value = "all";
@@ -210,19 +213,17 @@ function togglePause() {
     btnPause.textContent = "暂停识别";
     btnPause.classList.remove("btn-primary");
     btnPause.classList.add("btn-secondary");
-    progressStatus.textContent = "正在继续识别...";
+    progressStatus.textContent = "正在继续识别…";
   }
 }
 
 function cancelProcessing() {
   if (!state.isProcessing) return;
-  if (confirm("确定要终止当前识别任务吗？已完成的图片将保留并汇总。")) {
-    state.isCancelled = true;
-    state.isPaused = false;
-    btnCancel.disabled = true;
-    btnCancel.textContent = "正在终止...";
-    progressStatus.textContent = "正在终止任务...";
-  }
+  state.isCancelled = true;
+  state.isPaused = false;
+  btnCancel.disabled = true;
+  btnCancel.textContent = "正在终止…";
+  progressStatus.textContent = "正在终止，已完成的图片会保留并汇总。";
 }
 
 async function startBatchProcessing() {
@@ -251,7 +252,7 @@ async function startBatchProcessing() {
   btnPause.classList.add("btn-secondary");
   btnCancel.style.display = "inline-flex";
   btnCancel.disabled = false;
-  btnCancel.textContent = "终止任务";
+  btnCancel.textContent = "终止";
 
   btnReset.disabled = true;
   dropzone.style.pointerEvents = "none";
@@ -260,7 +261,7 @@ async function startBatchProcessing() {
   progressFill.style.width = "0%";
   progressFill.style.background = "var(--accent)";
   progressText.textContent = `0 / ${state.files.length}`;
-  progressStatus.textContent = "准备初始化 OCR 引擎...";
+  progressStatus.textContent = "正在准备识别…";
 
   const targetYear = yearInput.value.trim() || new Date().getFullYear().toString();
   if (modelSelect) {
@@ -304,7 +305,7 @@ async function startBatchProcessing() {
     
     // 更新行状态为识别中
     if (row) {
-      row.children[2].innerHTML = `<span class="pill" style="background: var(--accent-tint); color: var(--accent);">识别中...</span>`;
+      row.children[2].innerHTML = `<span class="pill" style="background: var(--accent-tint); color: var(--accent);">识别中…</span>`;
     }
 
     progressStatus.textContent = `正在识别 [${i + 1}/${total}]: ${file.name}`;
@@ -352,7 +353,7 @@ async function startBatchProcessing() {
 
   // 4. 批次全局姓名多数表决修正（对已处理部分生效）
   if (rawRecords.length > 0) {
-    progressStatus.textContent = "正在执行批次姓名多数表决与报表聚合...";
+    progressStatus.textContent = "正在汇总结果…";
     fillMissingNames(rawRecords);
 
     // 5. 生成无冲突的标准规范文件名并关联旋转后的 Blob
@@ -376,7 +377,7 @@ async function startBatchProcessing() {
     // 6. 汇总统计与更新看板
     state.summary = buildSummary(state.records);
     statInvoices.textContent = `${state.summary.totalCount} 张`;
-    statAmount.textContent = `${formatMoney(state.summary.totalAmount)} 元`;
+    statAmount.textContent = `${formatMoneyDisplay(state.summary.totalAmount)} 元`;
     statMedical.textContent = `${state.summary.medicalRecordCount} 张`;
     statUnknown.textContent = `${state.summary.unknownCount} 张`;
 
@@ -419,10 +420,10 @@ function updateTableRow(row, record, idx) {
   row.children[1].innerHTML = `<span class="document-title">${escapeHtml(record.originalName)}</span>${record.rotation ? `<span class="rotation-label">已旋转 ${record.rotation}°</span>` : ""}`;
   row.children[2].innerHTML = getKindBadge(record.kind);
   row.children[3].textContent = record.date.replace(/^(\d{4})(\d{2})(\d{2})$/, "$1-$2-$3");
-  row.children[4].textContent = record.amount == null ? "—" : formatMoney(record.amount);
+  row.children[4].textContent = record.amount == null ? "—" : formatMoneyDisplay(record.amount);
   row.children[5].textContent = record.name;
   const cell = row.children[9];
-  cell.innerHTML = `<div class="review-cell"><span class="confidence-value" title="文字置信度，非字段正确率">${formatConfidence(record.confidence)}</span><button class="review-link ${!record.reviewed && reviewWarnings(record).length ? "needs-attention" : ""}" ${state.isProcessing ? "disabled" : ""}>${record.reviewed ? "已核对" : reviewWarnings(record).length ? "需关注 · 核对" : "待核对"}</button></div>`;
+  cell.innerHTML = `<div class="review-cell"><span class="confidence-value" title="文字置信度，非字段正确率">${formatConfidence(record.confidence)}</span><button class="review-link ${!record.reviewed && reviewWarnings(record).length ? "needs-attention" : ""}" ${state.isProcessing ? "disabled" : ""}>${record.reviewed ? "已核对" : reviewWarnings(record).length ? "需核对" : "待核对"}</button></div>`;
   cell.querySelector("button").addEventListener("click", () => openReview(idx));
   const actionCell = row.children[8];
   actionCell.replaceChildren();
@@ -471,7 +472,7 @@ function refreshBatch() {
   });
   state.summary = buildSummary(state.records);
   statInvoices.textContent = `${state.summary.totalCount} 张`;
-  statAmount.textContent = `${formatMoney(state.summary.totalAmount)} 元`;
+  statAmount.textContent = `${formatMoneyDisplay(state.summary.totalAmount)} 元`;
   statMedical.textContent = `${state.summary.medicalRecordCount} 张`;
   statUnknown.textContent = `${state.summary.unknownCount} 张`;
   const daily = document.getElementById("dailyRows");
@@ -479,13 +480,13 @@ function refreshBatch() {
   for (const [date, item] of Object.entries(state.summary.daily)) {
     const row = document.createElement("span");
     row.className = "daily-item";
-    row.textContent = `${date.replace(/^(\d{4})(\d{2})(\d{2})$/, "$1-$2-$3")} · ${item.count} 张 · ${formatMoney(item.amount)} 元`;
+    row.textContent = `${date.replace(/^(\d{4})(\d{2})(\d{2})$/, "$1-$2-$3")} ${item.count} 张，共 ${formatMoneyDisplay(item.amount)} 元`;
     daily.append(row);
   }
   for (const [date, count] of Object.entries(state.summary.medicalDaily)) {
     const row = document.createElement("span");
     row.className = "daily-item";
-    row.textContent = `${date.replace(/^(\d{4})(\d{2})(\d{2})$/, "$1-$2-$3")} · 病历 ${count} 张`;
+    row.textContent = `${date.replace(/^(\d{4})(\d{2})(\d{2})$/, "$1-$2-$3")} 病历 ${count} 张`;
     daily.append(row);
   }
   filterResults();
@@ -504,7 +505,7 @@ function filterResults() {
     if (visible) shown++;
   });
   const pending = state.records.filter(r => !r.reviewed).length;
-  document.getElementById("reviewCount").textContent = state.records.length ? `${shown} / ${state.files.length} 张 · 待核对 ${pending} 张` : `${state.files.length} 张待识别`;
+  document.getElementById("reviewCount").textContent = state.records.length ? `${shown} / ${state.files.length} 张，待核对 ${pending} 张` : `${state.files.length} 张待识别`;
   document.getElementById("filterEmpty").hidden = shown > 0;
 }
 
@@ -532,7 +533,7 @@ function openReview(index) {
   document.getElementById("reviewAmount").value = record.amount ?? "";
   document.getElementById("reviewAmount").required = record.kind === "invoice";
   document.getElementById("reviewAmountLabel").hidden = record.kind !== "invoice";
-  document.getElementById("reviewOutput").textContent = `输出：${record.outputName}${record.amountSource ? " · 金额来源：" + record.amountSource : ""}`;
+  document.getElementById("reviewOutput").textContent = `输出：${record.outputName}${record.amountSource ? "；金额来源：" + record.amountSource : ""}`;
   document.getElementById("reviewRawText").textContent = record.text || "没有识别文字";
   document.getElementById("reviewError").textContent = "";
   document.getElementById("reviewError").style.color = "";
@@ -557,7 +558,7 @@ function saveReview(event) {
   const name = document.getElementById("reviewName").value.trim();
   const amount = document.getElementById("reviewAmount").value.trim();
   if (!/^\d{8}$/.test(date) || !name || (record.kind === "invoice" && (!/^\d+(?:\.\d{1,2})?$/.test(amount) || !Number.isFinite(Number(amount)) || Number(amount) <= 0))) {
-    document.getElementById("reviewError").textContent = "请填写有效的日期、姓名和总金额。";
+    document.getElementById("reviewError").textContent = record.kind === "invoice" ? "请填写有效的日期、姓名和总金额。" : "请填写有效的日期和姓名。";
     return;
   }
   if (record.kind === "invoice" && Number(amount) !== record.amount) {
@@ -592,7 +593,7 @@ function getKindBadge(kind) {
     case "medical_record":
       return `<span class="pill pill-medical">病历</span>`;
     default:
-      return `<span class="pill pill-unknown">未识别 (unknown)</span>`;
+      return `<span class="pill pill-unknown">未识别</span>`;
   }
 }
 
@@ -601,21 +602,21 @@ async function handleDownloadZip() {
 
   btnDownloadZip.disabled = true;
   const originalText = btnDownloadZip.innerHTML;
-  btnDownloadZip.textContent = "正在打包中...";
+  btnDownloadZip.textContent = "正在打包…";
 
   try {
     const zipBlob = await buildZipArchive(state.records, state.rotatedBlobs, (percent) => {
-      btnDownloadZip.textContent = `打包中 (${percent}%)...`;
+      btnDownloadZip.textContent = `打包中（${percent}%）…`;
     });
 
     const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
     triggerDownload(zipBlob, `hospital-ocr-batch-${dateStr}.zip`);
-  } catch (err) {
-    console.error("生成 ZIP 失败:", err);
-    alert(`打包下载失败: ${err.message}`);
-  } finally {
     btnDownloadZip.disabled = false;
     btnDownloadZip.innerHTML = originalText;
+  } catch (err) {
+    console.error("生成 ZIP 失败:", err);
+    btnDownloadZip.textContent = "打包失败，请重试";
+    setTimeout(() => { btnDownloadZip.disabled = false; btnDownloadZip.innerHTML = originalText; }, 3000);
   }
 }
 
@@ -623,6 +624,7 @@ function resetBatch() {
   if (state.isProcessing) return;
   if (state.records.length && !confirm("清空当前批次？请先下载需要保留的结果。")) return;
   closeReview();
+  document.getElementById("fileError").hidden = true;
 
   state.files = [];
   state.records = [];

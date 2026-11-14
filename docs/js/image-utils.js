@@ -15,6 +15,32 @@ export function formatMoney(value) {
 }
 
 /**
+ * 格式化金额（界面与报表展示用：千分位分隔，便于阅读大金额）
+ * CSV 与文件名仍用 formatMoney（无分隔符，方便 Excel 计算与文件名整洁）
+ * @param {number|null} value
+ * @returns {string}
+ */
+export function formatMoneyDisplay(value) {
+  if (value === null || value === undefined || isNaN(value)) return "0";
+  const num = Math.round((Number(value) + 1e-9) * 100) / 100;
+  const [int, dec] = num.toFixed(2).split(".");
+  const intPart = Number(int).toLocaleString("en-US");
+  if (dec === "00") return intPart;
+  return intPart + "." + (dec.endsWith("0") ? dec[0] : dec);
+}
+
+/**
+ * 格式化日期（界面与报表展示用：20240102 -> 2024-01-02，未识别则显示“未识别”）
+ * @param {string} date
+ * @returns {string}
+ */
+export function formatDateDisplay(date) {
+  if (!date || date === "unknown-date") return "未识别";
+  const m = String(date).match(/^(\d{4})(\d{2})(\d{2})$/);
+  return m ? `${m[1]}-${m[2]}-${m[3]}` : String(date);
+}
+
+/**
  * 安全文件名清洗
  * @param {string} value
  * @returns {string}
@@ -128,7 +154,7 @@ export function generateUniqueOutputName(record, originalName, usedNames) {
   if (record.skipped || record.kind === "unknown") {
     base = `unmatched-${safeFilename(stem)}`;
   } else if (record.kind === "medical_record") {
-    base = `${record.date}-病例-${safeFilename(record.name)}`;
+    base = `${record.date}-病历-${safeFilename(record.name)}`;
   } else {
     base = `${record.date}-${formatMoney(record.amount)}元-${safeFilename(record.name)}`;
   }

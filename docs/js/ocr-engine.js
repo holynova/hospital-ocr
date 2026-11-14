@@ -46,7 +46,7 @@ class ClientOCREngine {
     if (this.initPromise) return this.initPromise;
 
     this.initPromise = (async () => {
-      if (onProgress) onProgress({ status: "loading", progress: 0.1, message: "正在加载 PP-OCRv6 深度学习模型..." });
+      if (onProgress) onProgress({ status: "loading", progress: 0.1, message: "正在加载识别模型…" });
 
       const modelPreset = MODEL_PRESETS[this.modelName] || MODEL_PRESETS["v6-small"];
 
@@ -60,7 +60,7 @@ class ClientOCREngine {
 
       await this.service.initialize();
       this.isReady = true;
-      if (onProgress) onProgress({ status: "ready", progress: 1.0, message: "PP-OCRv6 引擎已就绪" });
+      if (onProgress) onProgress({ status: "ready", progress: 1.0, message: "识别引擎已就绪" });
     })();
 
     return this.initPromise;
@@ -77,7 +77,7 @@ class ClientOCREngine {
 
     const startTime = performance.now();
     try {
-      if (onProgress) onProgress({ status: "recognizing", progress: 0.3, message: "正在分析正向 (0°)..." });
+      if (onProgress) onProgress({ status: "recognizing", progress: 0.3, message: "正在分析正向（0°）…" });
 
       // 1. 尝试 0° 初始识别
       let initialBuffer = await imageSource.arrayBuffer();
@@ -105,7 +105,7 @@ class ClientOCREngine {
       const anglesToTry = [90, 180, 270];
       for (let i = 0; i < anglesToTry.length; i++) {
         const angle = anglesToTry[i];
-        if (onProgress) onProgress({ status: "recognizing", progress: 0.4 + i * 0.2, message: `尝试旋转纠偏 (${angle}°)...` });
+        if (onProgress) onProgress({ status: "recognizing", progress: 0.4 + i * 0.2, message: `尝试旋转纠偏（${angle}°）…` });
 
         // 通过 Canvas 旋转图片并导出为 Blob
         const rotatedBlob = await rotateAndCorrectImage(imgElem, angle);

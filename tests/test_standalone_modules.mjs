@@ -103,10 +103,14 @@ assert.strictEqual(summary.medicalRecordCount, 1);
 assert.strictEqual(summary.unknownCount, 1);
 
 const csv = makeCsv(records);
-assert(csv.includes("20240102,123.45,张三,0001.jpg"));
+assert(csv.startsWith("类型,日期,金额（元）,姓名,原文件名,输出文件名,旋转（度）,文字置信度,金额行置信度,金额来源,已核对,核对原因"));
+assert(csv.includes("发票,2024-01-02,123.45,张三,0001.jpg"));
+assert(csv.includes("病历,2024-01-02,,张三,0003.jpg"));
 
 const md = makeMarkdown(summary);
 assert(md.includes("- 总金额：134 元"));
+assert(md.includes("- 病历张数：1"));
+assert(md.includes("2024-01-02"));
 assert(md.includes("未计入统计"));
 console.log("✔ 报表生成与统计测试通过");
 

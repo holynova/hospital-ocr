@@ -17,7 +17,7 @@
 6. **批次多数表决姓名修正**：
    - 当同一个患者姓名出现 $\ge 3$ 次时，协助修复模糊病历的未识别姓名。
 7. **一键导出打包**：
-   - 自动生成 `YYYYMMDD-金额元-姓名.jpg` 或 `YYYYMMDD-病例-姓名.jpg`；
+   - 自动生成 `YYYYMMDD-金额元-姓名.jpg` 或 `YYYYMMDD-病历-姓名.jpg`；
    - 自动生成 `summary.csv`、`summary.json`、`summary.md` 和 `ocr-text.json`；
    - 纯端侧使用 JSZip 打包并一键下载 `batch-xxxx.zip`。
 

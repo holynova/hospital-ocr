@@ -1,7 +1,7 @@
 /**
  * 结构化统计报表生成与 JSZip 内存打包导出模块
  */
-import { formatMoney } from "./image-utils.js";
+import { formatMoney, formatMoneyDisplay, formatDateDisplay } from "./image-utils.js";
 
 /**
  * 汇总统计数据
@@ -88,8 +88,8 @@ export function makeMarkdown(summary) {
     "# 发票统计",
     "",
     `- 发票张数：${summary.totalCount}`,
-    `- 总金额：${formatMoney(summary.totalAmount)} 元`,
-    `- 病例张数：${summary.medicalRecordCount}`,
+    `- 总金额：${formatMoneyDisplay(summary.totalAmount)} 元`,
+    `- 病历张数：${summary.medicalRecordCount}`,
     `- 未识别：${summary.unknownCount}`,
     "",
     "## 每日小结",
@@ -99,25 +99,25 @@ export function makeMarkdown(summary) {
   ];
 
   for (const [date, item] of Object.entries(summary.daily)) {
-    lines.push(`| ${date} | ${item.count} | ${formatMoney(item.amount)} 元 |`);
+    lines.push(`| ${formatDateDisplay(date)} | ${item.count} | ${formatMoneyDisplay(item.amount)} 元 |`);
   }
 
   lines.push("", "## 发票明细", "", "| 日期 | 金额 | 姓名 | 原文件 | 输出文件 |", "| --- | ---: | --- | --- | --- |");
   for (const item of summary.invoices) {
-    lines.push(`| ${item.date} | ${formatMoney(item.amount)} 元 | ${item.name} | ${item.originalName} | ${item.outputName} |`);
+    lines.push(`| ${formatDateDisplay(item.date)} | ${formatMoneyDisplay(item.amount)} 元 | ${item.name} | ${item.originalName} | ${item.outputName} |`);
   }
 
   if (summary.medicalRecords.length > 0) {
-    lines.push("", "## 病例明细", "", "| 日期 | 姓名 | 原文件 | 输出文件 | 旋转 |", "| --- | --- | --- | --- | ---: |");
+    lines.push("", "## 病历明细", "", "| 日期 | 姓名 | 原文件 | 输出文件 | 旋转 |", "| --- | --- | --- | --- | ---: |");
     for (const item of summary.medicalRecords) {
-      lines.push(`| ${item.date} | ${item.name} | ${item.originalName} | ${item.outputName} | ${item.rotation}° |`);
+      lines.push(`| ${formatDateDisplay(item.date)} | ${item.name} | ${item.originalName} | ${item.outputName} | ${item.rotation}° |`);
     }
   }
 
   if (summary.skipped.length > 0) {
     lines.push("", "## 未计入统计", "", "| 原文件 | 输出文件 | 原因 |", "| --- | --- | --- |");
     for (const item of summary.skipped) {
-      lines.push(`| ${item.originalName} | ${item.outputName} | 模糊或未识别为发票/病例 |`);
+      lines.push(`| ${item.originalName} | ${item.outputName} | 模糊或未识别为发票/病历 |`);
     }
   }
 
@@ -130,11 +130,12 @@ export function makeMarkdown(summary) {
  * @returns {string}
  */
 export function makeCsv(records) {
-  const rows = [["kind", "date", "amount", "name", "original_name", "output_name", "rotation", "text_confidence", "amount_line_confidence", "amount_source", "reviewed", "review_reasons"]];
+  const kindLabel = { invoice: "发票", medical_record: "病历", unknown: "未识别" };
+  const rows = [["类型", "日期", "金额（元）", "姓名", "原文件名", "输出文件名", "旋转（度）", "文字置信度", "金额行置信度", "金额来源", "已核对", "核对原因"]];
   for (const record of records) {
     rows.push([
-      record.kind,
-      record.date,
+      kindLabel[record.kind] || "未识别",
+      formatDateDisplay(record.date),
       record.amount !== null && record.amount !== undefined ? formatMoney(record.amount) : "",
       record.name,
       record.originalName,
@@ -143,7 +144,7 @@ export function makeCsv(records) {
       record.confidence ?? "",
       record.amountConfidence ?? "",
       record.amountSource || "",
-      Boolean(record.reviewed),
+      record.reviewed ? "是" : "否",
       (record.reviewReasons || []).join("；")
     ]);
   }
