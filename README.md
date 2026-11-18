@@ -1,42 +1,62 @@
-# Hospital OCR / 医疗单据工作台
+<p align="right"><a href="README.en.md">English</a></p>
 
-中文：在浏览器本地批量识别发票与病历，提取日期、金额、姓名，校正方向并重命名图片。支持原图对照、置信度提示、人工核对及每日统计，导出 ZIP、CSV、JSON、Markdown。Windows、macOS、Linux 均可使用。首次加载需联网下载模型；模型分数不代表字段正确率，请核对后使用。
+<p align="center">
+  <img src="./assets/readme/hero.svg" width="100%" alt="医疗单据 OCR 工作台 — 带扫描框的发票简图，旁边是提取出的日期、姓名、金额三个字段">
+</p>
 
-English: A local-processing browser workbench for medical invoices and records. Extract dates, totals and names, correct image orientation, review OCR confidence beside the source, edit fields and export renamed images with daily reports. Works on Windows, macOS and Linux. Models download on first use; confidence is not a guarantee of correctness.
+<p align="center">
+  <a href="https://hospital-ocr.xiaosang.cc/">▶ 在线使用</a>
+  ·
+  <a href="https://github.com/holynova/hospital-ocr">GitHub 仓库</a>
+  ·
+  <a href="./USAGE.md">使用说明</a>
+</p>
 
-![真实页面截图，使用虚构演示单据 / App screenshot with fictional demo data](./assets/screenshot.png)
+医疗单据 OCR 工作台：在浏览器本地批量识别医疗发票与病历图片，提取日期、金额、姓名，校正图片方向，按规则重命名并导出报表。图片和识别结果不上传任何服务器——识别全在你的浏览器里跑，隐私单据放心用。首次识别需联网下载一次模型，之后即可离线使用。
 
-## 在线体验 / Live Demo
+## 截图
 
-- [Cloudflare Demo](https://hospital-ocr.xiaosang.cc/)（待上线验证 / pending verification）
-- [GitHub Repo](https://github.com/holynova/hospital-ocr)
-- [使用说明 / Usage](./USAGE.md)
+<p align="center">
+  <img src="./assets/screenshot.png" width="620" alt="医疗单据 OCR 工作台：上方是已选 1 张单据与模型选择，下方核对单据面板，左侧虚构演示发票、右侧日期姓名金额字段与置信度 97.4%">
+</p>
 
-<img src="./assets/qr.png" width="160" alt="扫码访问 Hospital OCR / Scan for Hospital OCR">
+<p align="center">
+  <img src="./assets/qr.png" width="160" alt="扫码访问 Hospital OCR">
+</p>
 
-## 本地运行 / Run Locally
+> 截图中的单据及字段均为虚构演示数据。
+
+## 功能
+
+- **本地识别**：PaddleOCR PP-OCRv6 在浏览器内推理（ONNX Runtime Web），图片不上传；3 个模型可选：v6-small（默认，高精度）、v6-tiny、v5-mobile。
+- **批量任务**：拖入多张发票/病历批量识别，支持暂停、继续、终止。
+- **方向校正**：四方向自适应纠偏，横着拍、倒着拍都能正过来识别。
+- **字段提取**：日期、姓名、总金额；金额优先取发票总额，并用中文大写金额交叉核对，大小写冲突时提示。
+- **人工核对**：原图对照编辑字段，确认后自动进入下一张待核对单据；修改同步更新文件名、汇总与导出报表。置信度低于 90%、总额无法可靠识别或关键字段缺失时提示关注。
+- **导出**：重命名图片 ZIP、CSV、JSON、Markdown 报表；每日小结。
+- **筛选搜索**：按姓名、日期、文件名搜索；待核对 / 已核对 / 未识别筛选。
+
+> 提醒：置信度是模型分数，不是字段正确的概率；金额、日期与姓名请核对后再使用。
+
+## 本地运行
 
 ```bash
 python3 -m http.server 3001 --directory docs
+# 打开 http://localhost:3001/
 ```
 
-打开 / Open `http://localhost:3001/`。
+也可以 `npm start`（同样起静态服务器）。建议最新 Chrome 或 Edge；Windows、macOS、Linux 均可，不需要安装 Python PaddleOCR 或配置独立显卡。
 
-## 测试与发布 / Test and Deploy
+## 技术
 
-```bash
-npm ci
-npm test
-npm run deploy:check
-npm run deploy
+- 前端：纯静态 `docs/`（HTML + CSS + JS，无框架），ONNX Runtime Web + `ppu-paddle-ocr`（PP-OCRv6），esbuild 打包（`npm run build:bundle`）。
+- 提取逻辑在 `docs/js/extractors.js`（日期 / 金额 / 大写金额 / 姓名 / 单据分类），与 OCR 引擎分离，可独立测试（`npm test`）。
+- 另有 Python 服务端实现（`server/`，FastAPI + PaddleOCR 3.7.0）与命令行工具（`server/cli.py`），适合批量离线处理。
+
 ```
-
-Cloudflare Workers Static Assets · `hospital-ocr.xiaosang.cc` · v1.0.1
-
-仅从 `main` 在本地手动部署 Cloudflare；已有 GitHub Pages 保留作回退。域名使用精确 Worker Route，因区域 Custom Domains 配额已满。
-
-Deploy manually from `main`. The existing GitHub Pages site remains a fallback. An exact Worker Route serves the custom hostname.
-
-图片和识别结果不上传识别服务器。页面使用 Umami 统计访问，不主动发送单据内容。截图中的单据及字段均为虚构演示数据。
-
-Images and OCR results are processed locally. Umami records page visits; the application does not send document contents to analytics. All document data in screenshots is fictional.
+docs/                    浏览器版：index.html + js/（ocr-engine、extractors、reports）
+docs/js/ocr-engine.js    纯前端推理引擎（PP-OCRv6 + 四方向纠偏）
+docs/js/extractors.js    字段提取：日期 / 金额 / 大写金额 / 姓名 / 分类
+server/                  Python 服务端（FastAPI + PaddleOCR）与 CLI
+tests/                   前后端测试（提取器、任务、存储、Web）
+```
